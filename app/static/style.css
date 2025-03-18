@@ -1,0 +1,168 @@
+/* Custom styles inspired by hail.is */
+.stApp {
+    background-color: #f8f9fa;
+}
+
+.main-header {
+    color: #1a1a1a;
+    font-family: 'Inter', sans-serif;
+    font-weight: 600;
+    margin-bottom: 2rem;
+}
+
+.stats-container {
+    background: white;
+    border-radius: 8px;
+    padding: 1.5rem;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+    margin-bottom: 2rem;
+}
+
+.stat-card {
+    background: #ffffff;
+    border: 1px solid #e9ecef;
+    border-radius: 8px;
+    padding: 1.5rem;
+    text-align: center;
+    transition: transform 0.2s;
+}
+
+.stat-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+}
+
+.stat-number {
+    font-size: 2.5rem;
+    font-weight: bold;
+    margin-bottom: 0.5rem;
+}
+
+.stat-label {
+    font-size: 1rem;
+    color: #6c757d;
+}
+
+.findings-table {
+    background: white;
+    border-radius: 8px;
+    padding: 1rem;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+}
+
+.severity-critical {
+    color: #dc3545;
+}
+
+.severity-high {
+    color: #fd7e14;
+}
+
+.severity-medium {
+    color: #ffc107;
+}
+
+.severity-low {
+    color: #20c997;
+}
+
+.severity-info {
+    color: #0dcaf0;
+}
+
+/* Upload section styling */
+.upload-section {
+    background: white;
+    border-radius: 8px;
+    padding: 2rem;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+    margin-bottom: 2rem;
+}
+
+.stButton>button {
+    background-color: #2d63ed;
+    color: white;
+    border: none;
+    padding: 0.5rem 1rem;
+    border-radius: 4px;
+    font-weight: 500;
+    transition: background-color 0.2s;
+}
+
+.stButton>button:hover {
+    background-color: #1c4ed8;
+}
+
+/* Custom styling for the date input */
+.date-input {
+    max-width: 200px;
+    margin-bottom: 1rem;
+}
+
+/* Tabs styling */
+.stTabs [data-baseweb="tab-list"] {
+    gap: 2rem;
+}
+
+.stTabs [data-baseweb="tab"] {
+    height: 50px;
+    white-space: pre-wrap;
+    background-color: transparent;
+    border-radius: 4px;
+    color: #6c757d;
+    font-size: 1rem;
+    font-weight: 500;
+}
+
+.stTabs [aria-selected="true"] {
+    background-color: #2d63ed !important;
+    color: white !important;
+}
+
+.charts-container {
+    margin: 2rem 0;
+}
+
+.findings-table {
+    margin: 2rem 0;
+}
+
+/* Due date warning styles */
+.warning-stat {
+    background-color: rgba(255, 243, 205, 0.7);
+    border: 1px solid #ffeeba;
+}
+
+.overdue-stat {
+    background-color: rgba(248, 215, 218, 0.7);
+    border: 1px solid #f5c6cb;
+}
+
+[data-testid="stDataFrame"] div[data-testid="stHorizontalBlock"] {
+    gap: 0 !important;
+}
+
+/* Warning and overdue icons */
+.warning-icon::before {
+    content: "⚠️";
+    margin-right: 8px;
+}
+
+.overdue-icon::before {
+    content: "❗";
+    margin-right: 8px;
+}
+
+/* Row highlighting */
+[data-testid="stDataFrame"] [data-testid="StyledDataFrameDataCell"] {
+    transition: background-color 0.2s ease;
+}
+
+/* Due date text colors */
+.text-warning {
+    color: #856404 !important;
+}
+
+.text-overdue {
+    color: #721c24 !important;
+} 
