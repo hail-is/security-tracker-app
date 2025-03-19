@@ -8,7 +8,7 @@ from app.components.data_processor import (
     export_findings_to_df
 )
 import os
-
+import logging
 # Set page config
 st.set_page_config(
     page_title="Security Findings Tracker",
@@ -28,17 +28,18 @@ if 'upload_results' not in st.session_state:
 with open(os.path.join(os.path.dirname(__file__), "static/style.css")) as f:
     st.markdown(f"<style>{f.read()}</style>", unsafe_allow_html=True)
 
-def get_due_date_status(due_date):
+def get_due_date_status(due_date: pd.Timestamp):
     """Return the status and style for a due date."""
     if not due_date:
         return "", ""
     
-    today = datetime.now().date()
-    due_date = datetime.strptime(due_date, '%Y-%m-%d 00:00:00').date() if isinstance(due_date, str) else due_date
+    today: datetime.date = datetime.now().date()
+    due_date: datetime.date = datetime.strptime(due_date, '%Y-%m-%d 00:00:00').date() if isinstance(due_date, str) else due_date
     
-    if due_date < today:
+    # Type safe comparison:
+    if due_date.date() < today:
         return "❗ ", "overdue"
-    elif due_date <= today + timedelta(days=7):
+    elif due_date.date() <= today + timedelta(days=7):
         return "⚠️ ", "warning"
     return "", ""
 
@@ -74,14 +75,11 @@ def show_upload_dialog():
     with col2:
         if uploaded_file is not None:
             if st.button("Confirm Upload", type="primary"):
-                try:
-                    results = process_csv_upload(uploaded_file, analysis_date.strftime('%Y-%m-%d 00:00:00'))
-                    st.session_state.open_modal = False
-                    st.session_state.show_success = True
-                    st.session_state.upload_results = results
-                    st.rerun()
-                except Exception as e:
-                    st.error(f"Error processing file: {str(e)}")
+                results = process_csv_upload(uploaded_file, analysis_date.strftime('%Y-%m-%d 00:00:00'))
+                st.session_state.open_modal = False
+                st.session_state.show_success = True
+                st.session_state.upload_results = results
+                st.rerun()
 
 # Call the dialog function
 if st.session_state.open_modal:
@@ -192,8 +190,6 @@ with col4:
     )
     st.plotly_chart(fig3, use_container_width=True)
 
-
-
 # Findings Tables
 tab1, tab2 = st.tabs(["Active Findings", "Resolved Findings"])
 
@@ -203,16 +199,10 @@ with tab1:
     active_df = export_findings_to_df(status='active')
     if not active_df.empty:
         # Add status indicators
-        grouped_df = active_df.groupby(['benchmark', 'finding_id', 'due_date', 'level', 'cvss', 'title', 'description', 'rationale', 'refs']).agg({
-            'failure': lambda x: '\n'.join(x),
-            'first_seen': 'min'
-        }).reset_index()
-        
-        # Add status column
-        grouped_df['status_icon'], grouped_df['status'] = zip(*grouped_df['due_date'].apply(get_due_date_status))
+        active_df['status_icon'], active_df['status'] = zip(*active_df['due_date'].apply(get_due_date_status))
         
         # Sort by due_date and cvss
-        grouped_df = grouped_df.sort_values(['due_date', 'cvss'], ascending=[True, False])
+        active_df = active_df.sort_values(['due_date', 'cvss'], ascending=[True, False])
         
         # Create style conditions for row highlighting
         def style_dataframe(df):
@@ -230,13 +220,13 @@ with tab1:
             return df.style.apply(row_style, axis=1)
         
         # Pagination
-        total_pages = len(grouped_df) // ROWS_PER_PAGE + (1 if len(grouped_df) % ROWS_PER_PAGE > 0 else 0)
+        total_pages = len(active_df) // ROWS_PER_PAGE + (1 if len(active_df) % ROWS_PER_PAGE > 0 else 0)
         page = st.session_state.get(f"page_active", 0)
         start_idx = page * ROWS_PER_PAGE
         end_idx = start_idx + ROWS_PER_PAGE
         
         # Apply styling to the visible portion of the dataframe
-        visible_df = grouped_df.iloc[start_idx:end_idx].copy()
+        visible_df = active_df.iloc[start_idx:end_idx].copy()
         styled_df = style_dataframe(visible_df)
         
         # Create the dataframe display
@@ -314,7 +304,7 @@ with tab1:
                 st.rerun()
         
         # Export button
-        csv = grouped_df.to_csv(index=False)
+        csv = active_df.to_csv(index=False)
         st.download_button(
             "Export Active Findings",
             csv,
@@ -328,69 +318,87 @@ with tab1:
 with tab2:
     resolved_df = export_findings_to_df(status='resolved')
     if not resolved_df.empty:
-        # Group resolved findings similarly
-        grouped_resolved_df = resolved_df.groupby(['benchmark', 'finding_id', 'closed_date', 'level', 'cvss', 'title', 'description', 'rationale', 'refs']).agg({
-            'failure': lambda x: '\n'.join(x),
-            'first_seen': 'min'
-        }).reset_index()
-        
         # Sort by closed_date and cvss
-        grouped_resolved_df = grouped_resolved_df.sort_values(['closed_date', 'cvss'], ascending=[False, False])
+        resolved_df = resolved_df.sort_values(['closed_date', 'cvss'], ascending=[False, False])
         
         # Pagination for resolved findings
-        total_pages_resolved = len(grouped_resolved_df) // ROWS_PER_PAGE + (1 if len(grouped_resolved_df) % ROWS_PER_PAGE > 0 else 0)
+        total_pages_resolved = len(resolved_df) // ROWS_PER_PAGE + (1 if len(resolved_df) % ROWS_PER_PAGE > 0 else 0)
         page_resolved = st.session_state.get(f"page_resolved", 0)
         start_idx = page_resolved * ROWS_PER_PAGE
         end_idx = start_idx + ROWS_PER_PAGE
         
+        # Create the dataframe display
         st.dataframe(
-            grouped_resolved_df.iloc[start_idx:end_idx],
+            resolved_df.iloc[start_idx:end_idx],
             column_config={
                 "level": st.column_config.TextColumn(
                     "Level",
                     help="Finding severity level",
-                    width="small"
+                    width=40
                 ),
                 "cvss": st.column_config.NumberColumn(
                     "CVSS",
                     help="CVSS score",
-                    width="small"
+                    width=40,
+                    format="%.1f"
                 ),
                 "first_seen": st.column_config.DateColumn(
                     "First Seen",
                     format="YYYY-MM-DD",
-                    width="medium"
+                    width=100
                 ),
                 "closed_date": st.column_config.DateColumn(
                     "Closed Date",
                     format="YYYY-MM-DD",
-                    width="medium"
+                    width=100
+                ),
+                "title": st.column_config.TextColumn(
+                    "Title",
+                    width=300,
+                    help="Finding title",
+                    max_chars=100
+                ),
+                "description": st.column_config.TextColumn(
+                    "Description",
+                    width=400,
+                    help="Finding description",
+                    max_chars=100
                 ),
                 "failure": st.column_config.TextColumn(
                     "Failures",
-                    width="large",
-                    help="List of failures for this finding"
+                    width=400,
+                    help="List of failures for this finding",
+                    max_chars=100
+                ),
+                "refs": st.column_config.LinkColumn(
+                    "References",
+                    help="Reference links",
+                    max_chars=50,
+                    width=150
                 )
             },
             hide_index=True,
-            use_container_width=True
+            use_container_width=True,
+            column_order=["closed_date", "level", "cvss", "title", "description", "failure", "first_seen", "refs"],
+            row_height=100,
+            height=550,
         )
         
-                # Pagination controls in columns for better layout
+        # Pagination controls in columns for better layout
         col1, col2, col3 = st.columns([1, 2, 1])
         with col1:
-            if st.button("← Previous", disabled=(page_resolved == 0)):
+            if st.button("← Previous", disabled=(page_resolved == 0), key="prev_resolved"):
                 st.session_state[f"page_resolved"] = max(0, page_resolved - 1)
                 st.rerun()
         with col2:
             st.markdown(f"Page {page_resolved + 1} of {total_pages_resolved}")
         with col3:
-            if st.button("Next →", disabled=(page_resolved >= total_pages_resolved - 1)):
+            if st.button("Next →", disabled=(page_resolved >= total_pages_resolved - 1), key="next_resolved"):
                 st.session_state[f"page_resolved"] = min(total_pages_resolved - 1, page_resolved + 1)
                 st.rerun()
         
         # Export button
-        csv = grouped_resolved_df.to_csv(index=False)
+        csv = resolved_df.to_csv(index=False)
         st.download_button(
             "Export Resolved Findings",
             csv,

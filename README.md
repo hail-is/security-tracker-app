@@ -26,7 +26,7 @@ python --version  # Should show 3.9 or higher
 2. Clone the repository:
 ```bash
 git clone <repository-url>
-cd security-tracking
+cd security-tracker-app
 ```
 
 3. Create a virtual environment and activate it:
