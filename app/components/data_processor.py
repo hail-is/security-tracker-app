@@ -7,9 +7,9 @@ from app.database.schema import (
     insert_finding,
     create_remediation,
     link_finding_to_remediation,
-    mark_findings_resolved,
-    get_active_findings,
-    get_resolved_findings,
+    mark_remediations_resolved_if_not_in_list,
+    get_active_remediations,
+    get_resolved_remediations,
     create_issue_for_remediations
 )
 
@@ -69,6 +69,7 @@ def process_csv_upload(file, analysis_date):
         # Get or create scan record
         scan_id = get_or_create_scan(conn, analysis_date)
         
+        still_active_remediation_ids = []
         remediations_needing_issues = {}
         
         # Process each row
@@ -111,6 +112,7 @@ def process_csv_upload(file, analysis_date):
                 existing_remediation = cursor.fetchone()
                 
                 if existing_remediation:
+                    still_active_remediation_ids.append(existing_remediation[0])
                     existing_count += 1
                 else:
                     # Create new remediation
@@ -128,7 +130,7 @@ def process_csv_upload(file, analysis_date):
         
         # Mark findings as resolved if they're not in current upload
         # TODO: we should mark previously active resolutions as resolved if there is no new resolution matching the same finding
-        mark_findings_resolved(conn, scan_id, active_finding_ids)
+        mark_remediations_resolved_if_not_in_list(conn, scan_id, still_active_remediation_ids)
         
         # Get count of resolved findings in this scan
         cursor = conn.cursor()
@@ -253,9 +255,9 @@ def export_findings_to_df(status='active'):
     conn = get_db_connection()
     try:
         if status == 'active':
-            findings = get_active_findings(conn)
+            findings = get_active_remediations(conn)
         else:
-            findings = get_resolved_findings(conn)
+            findings = get_resolved_remediations(conn)
             
         if not findings:
             return pd.DataFrame()

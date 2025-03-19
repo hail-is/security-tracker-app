@@ -171,8 +171,8 @@ def link_finding_to_remediation(conn, remediation_id, finding_id):
     VALUES (?, ?)
     ''', (remediation_id, finding_id))
 
-def get_active_findings(conn):
-    """Get all active (unresolved) findings with their remediation info."""
+def get_active_remediations(conn):
+    """Get all active (unresolved) remediations with their remediation info."""
     cursor = conn.cursor()
     cursor.execute('''
     SELECT 
@@ -201,8 +201,8 @@ def get_active_findings(conn):
     columns = [column[0] for column in cursor.description]
     return [dict(zip(columns, row)) for row in cursor.fetchall()]
 
-def get_resolved_findings(conn):
-    """Get all resolved findings with their remediation info."""
+def get_resolved_remediations(conn):
+    """Get all resolved remediations with their remediation info."""
     cursor = conn.cursor()
     cursor.execute('''
     SELECT 
@@ -233,21 +233,18 @@ def get_resolved_findings(conn):
     columns = [column[0] for column in cursor.description]
     return [dict(zip(columns, row)) for row in cursor.fetchall()]
 
-def mark_findings_resolved(conn, scan_id, active_finding_ids):
-    """Mark findings as resolved if they're not in the current scan."""
+def mark_remediations_resolved_if_not_in_list(conn, scan_id, active_remediation_ids):
+    """Mark remediations as resolved if they're not in the current scan."""
     cursor = conn.cursor()
-    placeholders = ','.join(['?' for _ in active_finding_ids]) if active_finding_ids else 'NULL'
+    placeholders = ','.join(['?' for _ in active_remediation_ids]) if active_remediation_ids else 'NULL'
     cursor.execute(f'''
     UPDATE remediations
     SET state = 'resolved',
         resolved_in_scan = ?
     WHERE state = 'open'
-    AND id NOT IN (
-        SELECT remediation_id 
-        FROM remediation_findings 
-        WHERE finding_id IN ({placeholders})
-    )
-    ''', [scan_id] + (list(active_finding_ids) if active_finding_ids else []))
+    AND id NOT IN ({placeholders})
+    ''', [scan_id] + placeholders)
+
     conn.commit()
 
 def create_issue_for_remediations(conn, remediation_ids, benchmark_id, due_date):
