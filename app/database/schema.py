@@ -58,7 +58,7 @@ def init_db():
         benchmark_id INTEGER NOT NULL,
         first_seen_scan INTEGER NOT NULL,
         resolved_in_scan INTEGER,
-        state TEXT NOT NULL CHECK (state IN ('open', 'resolved', 'won''t fix')),
+        state TEXT NOT NULL CHECK (state IN ('open', 'resolved')),
         due_date DATE NOT NULL,
         FOREIGN KEY (benchmark_id) REFERENCES benchmark(id),
         FOREIGN KEY (first_seen_scan) REFERENCES scans(id),
@@ -85,6 +85,7 @@ def init_db():
         benchmark_id INTEGER NOT NULL,
         due_date DATE NOT NULL,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        status TEXT NOT NULL CHECK (status IN ('open', 'resolved')),
         resolved_at TIMESTAMP,
         FOREIGN KEY (benchmark_id) REFERENCES benchmark(id)
     )
@@ -233,17 +234,60 @@ def get_resolved_remediations(conn):
     columns = [column[0] for column in cursor.description]
     return [dict(zip(columns, row)) for row in cursor.fetchall()]
 
+
+def get_active_issues(conn):
+    """Get all active issues."""
+    cursor = conn.cursor()
+    cursor.execute('''
+    SELECT
+        b.benchmark,
+        b.finding_id,
+        b.level,
+        b.cvss,
+        b.title,
+        b.description,
+        b.rationale,
+        b.refs,
+        i.due_date,
+        i.created_at,
+        i.resolved_at,
+        i.status,
+        COUNT(ir.remediation_id) as remediation_count
+    FROM issues i
+    JOIN issue_remediations ir ON i.id = ir.issue_id
+    JOIN benchmark b ON i.benchmark_id = b.id
+    WHERE i.status = 'open'
+    GROUP BY i.id
+    ''')
+    
+    # Convert rows to dictionaries with column names
+    columns = [column[0] for column in cursor.description]
+    return [dict(zip(columns, row)) for row in cursor.fetchall()]
+
+
 def mark_remediations_resolved_if_not_in_list(conn, scan_id, active_remediation_ids):
     """Mark remediations as resolved if they're not in the current scan."""
-    cursor = conn.cursor()
-    placeholders = ','.join(['?' for _ in active_remediation_ids]) if active_remediation_ids else 'NULL'
-    cursor.execute(f'''
-    UPDATE remediations
-    SET state = 'resolved',
-        resolved_in_scan = ?
-    WHERE state = 'open'
-    AND id NOT IN ({placeholders})
-    ''', [scan_id] + placeholders)
+    
+    print(f"Marking all but {len(active_remediation_ids)} still-active remediations as resolved")
+    
+    if not active_remediation_ids:
+        # No active remediations - update all open remediations to resolved
+        cursor = conn.cursor()
+        cursor.execute('''
+        UPDATE remediations
+        SET state = 'resolved'
+        WHERE state = 'open'
+        ''')
+    else:
+        cursor = conn.cursor()
+        placeholders = ','.join(['?' for _ in active_remediation_ids])
+        cursor.execute(f'''
+        UPDATE remediations
+        SET state = 'resolved',
+            resolved_in_scan = ?
+        WHERE state = 'open'
+        AND id NOT IN ({placeholders})
+        ''', [scan_id, *active_remediation_ids])
 
     conn.commit()
 
@@ -251,8 +295,8 @@ def create_issue_for_remediations(conn, remediation_ids, benchmark_id, due_date)
     """Create a new issue for a remediation if one doesn't exist."""
     cursor = conn.cursor()
     cursor.execute('''
-    INSERT INTO issues (benchmark_id, due_date)
-    VALUES (?, ?)
+    INSERT INTO issues (benchmark_id, due_date, status)
+    VALUES (?, ?, 'open')
     ''', (benchmark_id, due_date))
     
     issue_id = cursor.lastrowid

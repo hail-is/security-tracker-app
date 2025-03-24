@@ -5,7 +5,7 @@ import plotly.express as px
 from app.components.data_processor import (
     process_csv_upload,
     get_findings_summary,
-    export_findings_to_df
+    export_issues_to_df
 )
 import os
 import logging
@@ -190,13 +190,13 @@ with col4:
     )
     st.plotly_chart(fig3, use_container_width=True)
 
-# Findings Tables
-tab1, tab2 = st.tabs(["Active Findings", "Resolved Findings"])
+# Issues Tables
+tab1, tab2 = st.tabs(["Active Issues", "Resolved Issues"])
 
 ROWS_PER_PAGE = 5
 
 with tab1:
-    active_df = export_findings_to_df(status='active')
+    active_df = export_issues_to_df(status='active')
     if not active_df.empty:
         # Add status indicators
         active_df['status_icon'], active_df['status'] = zip(*active_df['due_date'].apply(get_due_date_status))
@@ -313,98 +313,8 @@ with tab1:
             key='download-active-csv'
         )
     else:
-        st.info("No active findings.")
+        st.info("No active issues.")
 
 with tab2:
-    resolved_df = export_findings_to_df(status='resolved')
-    if not resolved_df.empty:
-        # Sort by closed_date and cvss
-        resolved_df = resolved_df.sort_values(['closed_date', 'cvss'], ascending=[False, False])
-        
-        # Pagination for resolved findings
-        total_pages_resolved = len(resolved_df) // ROWS_PER_PAGE + (1 if len(resolved_df) % ROWS_PER_PAGE > 0 else 0)
-        page_resolved = st.session_state.get(f"page_resolved", 0)
-        start_idx = page_resolved * ROWS_PER_PAGE
-        end_idx = start_idx + ROWS_PER_PAGE
-        
-        # Create the dataframe display
-        st.dataframe(
-            resolved_df.iloc[start_idx:end_idx],
-            column_config={
-                "level": st.column_config.TextColumn(
-                    "Level",
-                    help="Finding severity level",
-                    width=40
-                ),
-                "cvss": st.column_config.NumberColumn(
-                    "CVSS",
-                    help="CVSS score",
-                    width=40,
-                    format="%.1f"
-                ),
-                "first_seen": st.column_config.DateColumn(
-                    "First Seen",
-                    format="YYYY-MM-DD",
-                    width=100
-                ),
-                "closed_date": st.column_config.DateColumn(
-                    "Closed Date",
-                    format="YYYY-MM-DD",
-                    width=100
-                ),
-                "title": st.column_config.TextColumn(
-                    "Title",
-                    width=300,
-                    help="Finding title",
-                    max_chars=100
-                ),
-                "description": st.column_config.TextColumn(
-                    "Description",
-                    width=400,
-                    help="Finding description",
-                    max_chars=100
-                ),
-                "failure": st.column_config.TextColumn(
-                    "Failures",
-                    width=400,
-                    help="List of failures for this finding",
-                    max_chars=100
-                ),
-                "refs": st.column_config.LinkColumn(
-                    "References",
-                    help="Reference links",
-                    max_chars=50,
-                    width=150
-                )
-            },
-            hide_index=True,
-            use_container_width=True,
-            column_order=["closed_date", "level", "cvss", "title", "description", "failure", "first_seen", "refs"],
-            row_height=100,
-            height=550,
-        )
-        
-        # Pagination controls in columns for better layout
-        col1, col2, col3 = st.columns([1, 2, 1])
-        with col1:
-            if st.button("← Previous", disabled=(page_resolved == 0), key="prev_resolved"):
-                st.session_state[f"page_resolved"] = max(0, page_resolved - 1)
-                st.rerun()
-        with col2:
-            st.markdown(f"Page {page_resolved + 1} of {total_pages_resolved}")
-        with col3:
-            if st.button("Next →", disabled=(page_resolved >= total_pages_resolved - 1), key="next_resolved"):
-                st.session_state[f"page_resolved"] = min(total_pages_resolved - 1, page_resolved + 1)
-                st.rerun()
-        
-        # Export button
-        csv = resolved_df.to_csv(index=False)
-        st.download_button(
-            "Export Resolved Findings",
-            csv,
-            "resolved_findings.csv",
-            "text/csv",
-            key='download-resolved-csv'
-        )
-    else:
-        st.info("No resolved findings.")
+    # Not implemented yet
+    st.info("Resolved issues not implemented yet")

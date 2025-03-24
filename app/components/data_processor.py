@@ -8,8 +8,7 @@ from app.database.schema import (
     create_remediation,
     link_finding_to_remediation,
     mark_remediations_resolved_if_not_in_list,
-    get_active_remediations,
-    get_resolved_remediations,
+    get_active_issues,
     create_issue_for_remediations
 )
 
@@ -69,7 +68,7 @@ def process_csv_upload(file, analysis_date):
         # Get or create scan record
         scan_id = get_or_create_scan(conn, analysis_date)
         
-        still_active_remediation_ids = []
+        active_remediation_ids = set()
         remediations_needing_issues = {}
         
         # Process each row
@@ -112,7 +111,7 @@ def process_csv_upload(file, analysis_date):
                 existing_remediation = cursor.fetchone()
                 
                 if existing_remediation:
-                    still_active_remediation_ids.append(existing_remediation[0])
+                    active_remediation_ids.add(existing_remediation[0])
                     existing_count += 1
                 else:
                     # Create new remediation
@@ -120,17 +119,20 @@ def process_csv_upload(file, analysis_date):
                     remediation_id = create_remediation(conn, benchmark_id, scan_id, due_date)
                     link_finding_to_remediation(conn, remediation_id, finding_id)
                     
-                    # Get the list of remediation ids for the given benchmark and due date:
-                    old_list = remediations_needing_issues.get((benchmark_id, due_date), [])
-                    remediations_needing_issues[(benchmark_id, due_date)] = old_list.append(remediation_id)
+                    # Add this remediation to the list of active remediations:
+                    active_remediation_ids.add(remediation_id)
+
+                    # Add this remediation to the list of remediations needing issues:
+                    remediations_for_this_benchmark: list[int] = remediations_needing_issues.get((benchmark_id, due_date), [])
+                    remediations_for_this_benchmark.append(remediation_id)
+                    remediations_needing_issues[(benchmark_id, due_date)] = remediations_for_this_benchmark
                     new_count += 1
 
         for (benchmark_id, due_date), remediation_ids in remediations_needing_issues.items():
             create_issue_for_remediations(conn, remediation_ids, benchmark_id, due_date)
         
         # Mark findings as resolved if they're not in current upload
-        # TODO: we should mark previously active resolutions as resolved if there is no new resolution matching the same finding
-        mark_remediations_resolved_if_not_in_list(conn, scan_id, still_active_remediation_ids)
+        mark_remediations_resolved_if_not_in_list(conn, scan_id, active_remediation_ids)
         
         # Get count of resolved findings in this scan
         cursor = conn.cursor()
@@ -250,20 +252,21 @@ def get_findings_summary():
     finally:
         conn.close()
 
-def export_findings_to_df(status='active'):
-    """Export findings to pandas DataFrame."""
+def export_issues_to_df(status='active'):
+    """Export issues to pandas DataFrame."""
     conn = get_db_connection()
     try:
         if status == 'active':
-            findings = get_active_remediations(conn)
+            issues = get_active_issues(conn)
         else:
-            findings = get_resolved_remediations(conn)
+            # Throw now implemented
+            raise NotImplementedError("Resolved issues not implemented yet")
             
-        if not findings:
+        if not issues:
             return pd.DataFrame()
             
         # Convert list of dictionaries to DataFrame
-        df = pd.DataFrame.from_records(findings)
+        df = pd.DataFrame.from_records(issues)
         
         # Convert date strings to datetime objects
         date_columns = ['due_date', 'first_seen', 'closed_date']
