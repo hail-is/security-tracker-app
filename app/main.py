@@ -3,7 +3,8 @@ import pandas as pd
 from datetime import datetime, timedelta
 import plotly.express as px
 from app.components.data_processor import (
-    process_csv_upload,
+    process_single_scan_upload,
+    process_multiple_scan_upload,
     get_findings_summary,
     export_issues_to_df
 )
@@ -43,6 +44,12 @@ def get_due_date_status(due_date: pd.Timestamp):
         return "⚠️ ", "warning"
     return "", ""
 
+
+def get_issue_page_link(id: str):
+    """Link to the issue detail page with id as query parameter"""
+    return f'/issue_detail?id={id}'
+
+
 # Header with Upload Button
 col1, col2 = st.columns([3, 1])
 with col1:
@@ -58,14 +65,18 @@ with col2:
 # Upload Modal Dialog
 @st.dialog("Upload Security Findings")
 def show_upload_dialog():
-    st.subheader("Upload New Findings")
+    # Show a dropdown to select the type of upload
+    upload_type = st.selectbox("Upload Type", ["Single Scan", "Multiple Scans"])
+    st.subheader("Upload Single Scan")
     uploaded_file = st.file_uploader("Select CSV File", type="csv", key="file_uploader")
-    analysis_date = st.date_input(
-        "Analysis Date",
-        value=datetime.now().date(),
-        key="analysis_date",
-        help="Date when the security analysis was performed"
-    )
+    
+    if upload_type == "Single Scan":    
+        analysis_date = st.date_input(
+            "Analysis Date",
+            value=datetime.now().date(),
+            key="analysis_date",
+            help="Date when the security analysis was performed"
+        )
     
     col1, col2 = st.columns([1, 1])
     with col1:
@@ -75,7 +86,10 @@ def show_upload_dialog():
     with col2:
         if uploaded_file is not None:
             if st.button("Confirm Upload", type="primary"):
-                results = process_csv_upload(uploaded_file, analysis_date.strftime('%Y-%m-%d 00:00:00'))
+                if upload_type == "Single Scan":
+                    results = process_single_scan_upload(uploaded_file, analysis_date.strftime('%Y-%m-%d 00:00:00'))
+                elif upload_type == "Multiple Scans":
+                    results = process_multiple_scan_upload(uploaded_file)
                 st.session_state.open_modal = False
                 st.session_state.show_success = True
                 st.session_state.upload_results = results
@@ -196,11 +210,12 @@ tab1, tab2 = st.tabs(["Active Issues", "Resolved Issues"])
 ROWS_PER_PAGE = 5
 
 with tab1:
-    active_df = export_issues_to_df(status='active')
+    active_df = export_issues_to_df(status='open')
     if not active_df.empty:
         # Add status indicators
         active_df['status_icon'], active_df['status'] = zip(*active_df['due_date'].apply(get_due_date_status))
-        
+        active_df['details_page'] = active_df['id'].apply(get_issue_page_link)
+
         # Sort by due_date and cvss
         active_df = active_df.sort_values(['due_date', 'cvss'], ascending=[True, False])
         
@@ -229,63 +244,44 @@ with tab1:
         visible_df = active_df.iloc[start_idx:end_idx].copy()
         styled_df = style_dataframe(visible_df)
         
+
         # Create the dataframe display
         st.dataframe(
             styled_df,
             column_config={
                 "status_icon": st.column_config.TextColumn(
                     "",
-                    width=40,
+                ),
+                "details_page": st.column_config.LinkColumn(
+                    "Details",
+                    help="Click to view issue details",
+                    display_text="View",
+                    width="small"
                 ),
                 "level": st.column_config.TextColumn(
                     "Level",
                     help="Finding severity level",
-                    width=40
                 ),
                 "cvss": st.column_config.NumberColumn(
                     "CVSS",
                     help="CVSS score",
-                    width=40,
                     format="%.1f"
-                ),
-                "first_seen": st.column_config.DateColumn(
-                    "First Seen",
-                    format="YYYY-MM-DD",
-                    width=100
                 ),
                 "due_date": st.column_config.DateColumn(
                     "Due Date",
                     format="YYYY-MM-DD",
-                    width=100
                 ),
                 "title": st.column_config.TextColumn(
                     "Title",
-                    width=300,
-                    help="Finding title",
-                    max_chars=100
+                    help="Finding title"
                 ),
                 "description": st.column_config.TextColumn(
                     "Description",
-                    width=400,
-                    help="Finding description",
-                    max_chars=100
+                    help="Finding description"
                 ),
-                "failure": st.column_config.TextColumn(
-                    "Failures",
-                    width=400,
-                    help="List of failures for this finding",
-                    max_chars=100
-                ),
-                "refs": st.column_config.LinkColumn(
-                    "References",
-                    help="Reference links",
-                    max_chars=50,
-                    width=150
-                )
             },
             hide_index=True,
-            use_container_width=True,
-            column_order=["status_icon", "due_date", "level", "cvss", "title", "description", "failure", "first_seen", "refs"],
+            column_order=["status_icon", "details_page", "due_date", "level", "cvss", "title", "description"],
             row_height=100,
             height=550,
         )

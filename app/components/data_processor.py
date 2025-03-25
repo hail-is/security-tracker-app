@@ -8,8 +8,8 @@ from app.database.schema import (
     create_remediation,
     link_finding_to_remediation,
     mark_remediations_resolved_if_not_in_list,
-    get_active_issues,
-    create_issue_for_remediations
+    create_issue_for_remediations,
+    check_if_scan_exists
 )
 
 def get_cvss_range(cvss):
@@ -27,7 +27,10 @@ def get_cvss_range(cvss):
         else:
             return "Info"
     except (ValueError, TypeError):
-        return "Unknown"
+        if not cvss:
+            return "Info"
+        else:
+            return "Unknown"
 
 
 def calculate_due_date(cvss, analysis_date):
@@ -45,18 +48,84 @@ def calculate_due_date(cvss, analysis_date):
     return datetime.strptime(analysis_date, '%Y-%m-%d 00:00:00') + timedelta(days=time_to_resolve)
 
 
-def process_csv_upload(file, analysis_date):
-    """Process uploaded CSV file and update database."""
-    # Read CSV file
-    df = pd.read_csv(file)
+
+def validate_columns(df, additional_columns=[]):
+    """Validate columns in the CSV file."""
     required_columns = [
         'benchmark', 'id', 'level', 'cvss', 'title',
         'failures', 'description', 'rationale', 'refs'
     ]
     
     # Validate columns
+    required_columns.extend(additional_columns)
     if not all(col in df.columns for col in required_columns):
         missing_cols = [col for col in required_columns if col not in df.columns]
+        raise ValueError(f"Missing required columns: {', '.join(missing_cols)}")
+
+
+
+def process_single_scan_upload(file, analysis_date):
+    """Process a single scan upload."""
+    df = pd.read_csv(file)
+    return process_upload_dataframe(df, analysis_date)
+
+
+def process_multiple_scan_upload(file):
+    """Process a multiple scan upload with multiple analysis dates."""
+    df = pd.read_csv(file)
+    
+    column_name_map = {
+        'benchmark': 'Benchmark',
+        'id': 'CIS_ID',
+        'level': 'Level',
+        'cvss': 'CVSS',
+        'title': 'Title',
+        'failures': 'Failures',
+        'description': 'Description',
+        'rationale': 'Rationale',
+        'refs': 'References'
+    }
+
+    # Map from date to dataframe
+    results = {
+        'new': 0,
+        'existing': 0,
+        'resolved': 0
+    }
+    
+    for date in df['Date'].unique():
+        date_obj = datetime.strptime(date, '%m/%d/%Y')
+        # If we don't already have a scan for this date, create one
+        conn = get_db_connection()
+        if not check_if_scan_exists(conn, date_obj):
+            this_data = df[df['Date'] == date]
+            this_update = process_upload_dataframe(this_data, date_obj.strftime('%Y-%m-%d 00:00:00'), column_name_map)
+            results['new'] += this_update['new']
+            results['existing'] += this_update['existing']
+            results['resolved'] += this_update['resolved']
+        else:
+            # Just log an continue
+            print(f"Scan already exists for {date}, skipping")
+            continue
+
+
+    return results
+
+
+
+def process_upload_dataframe(df: pd.DataFrame, analysis_date, column_name_map=None) -> dict:
+    """Process a dataframe of uploaded CSV file and update database."""
+    required_columns = [
+        'benchmark', 'id', 'level', 'cvss', 'title',
+        'failures', 'description', 'rationale', 'refs'
+    ]
+
+    if not column_name_map:
+        column_name_map = { x: x for x in required_columns }
+    
+    # Validate columns
+    if not all(column_name_map.get(col) in df.columns for col in required_columns):
+        missing_cols = [column_name_map.get(col) for col in required_columns if column_name_map.get(col) not in df.columns]
         raise ValueError(f"Missing required columns: {', '.join(missing_cols)}")
     
     conn = get_db_connection()
@@ -75,19 +144,19 @@ def process_csv_upload(file, analysis_date):
         for _, row in df.iterrows():
             # Create benchmark record
             benchmark_data = (
-                row['benchmark'],
-                row['id'],  # This is the finding_id from CSV
-                row['level'],
-                float(row['cvss']) if row['cvss'] else None,
-                row['title'],
-                row['description'],
-                row['rationale'],
-                row['refs']
+                row[column_name_map['benchmark']],
+                row[column_name_map['id']],  # This is the finding_id from CSV
+                row[column_name_map['level']],
+                float(row[column_name_map['cvss']]) if row[column_name_map['cvss']] else None,
+                row[column_name_map['title']],
+                row[column_name_map['description']],
+                row[column_name_map['rationale']],
+                row[column_name_map['refs']]
             )
             benchmark_id = get_or_create_benchmark(conn, benchmark_data)
             
             # Handle multiple failures
-            failures = str(row['failures']).split('\n')
+            failures = str(row[column_name_map['failures']]).split('\n')
             for failure in failures:
                 failure = failure.strip()
                 if not failure:
@@ -115,7 +184,7 @@ def process_csv_upload(file, analysis_date):
                     existing_count += 1
                 else:
                     # Create new remediation
-                    due_date = calculate_due_date(row['cvss'], analysis_date)
+                    due_date = calculate_due_date(row[column_name_map['cvss']], analysis_date)
                     remediation_id = create_remediation(conn, benchmark_id, scan_id, due_date)
                     link_finding_to_remediation(conn, remediation_id, finding_id)
                     
@@ -252,28 +321,43 @@ def get_findings_summary():
     finally:
         conn.close()
 
-def export_issues_to_df(status='active'):
-    """Export issues to pandas DataFrame."""
+def export_issues_to_df(status='open'):
+    """Export issues to a DataFrame."""
     conn = get_db_connection()
-    try:
-        if status == 'active':
-            issues = get_active_issues(conn)
-        else:
-            # Throw now implemented
-            raise NotImplementedError("Resolved issues not implemented yet")
-            
-        if not issues:
-            return pd.DataFrame()
-            
-        # Convert list of dictionaries to DataFrame
-        df = pd.DataFrame.from_records(issues)
-        
-        # Convert date strings to datetime objects
-        date_columns = ['due_date', 'first_seen', 'closed_date']
-        for col in date_columns:
-            if col in df.columns:
-                df[col] = pd.to_datetime(df[col])
-        
-        return df
-    finally:
-        conn.close() 
+    cursor = conn.cursor()
+    
+
+    sql = '''
+    SELECT 
+        i.id,
+        i.due_date,
+        i.created_at,
+        i.resolved_at,
+        i.status,
+        b.benchmark,
+        b.finding_id,
+        b.level,
+        b.cvss,
+        b.title,
+        b.description,
+        b.rationale,
+        b.refs
+    FROM issues i
+    JOIN benchmark b ON i.benchmark_id = b.id
+    WHERE i.status = ?
+    '''
+    
+    cursor.execute(sql, (status,))
+    
+    # Convert list of dictionaries to DataFrame
+    issues = [dict(row) for row in cursor.fetchall()]
+
+    df = pd.DataFrame.from_records(issues)
+    
+    # Convert date strings to datetime objects
+    date_columns = ['due_date', 'created_at', 'resolved_at']
+    for col in date_columns:
+        if col in df.columns:
+            df[col] = pd.to_datetime(df[col])
+    
+    return df 

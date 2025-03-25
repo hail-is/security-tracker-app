@@ -172,67 +172,13 @@ def link_finding_to_remediation(conn, remediation_id, finding_id):
     VALUES (?, ?)
     ''', (remediation_id, finding_id))
 
-def get_active_remediations(conn):
-    """Get all active (unresolved) remediations with their remediation info."""
+def check_if_scan_exists(conn, scan_date):
+    """Check if a scan exists for a given date."""
     cursor = conn.cursor()
     cursor.execute('''
-    SELECT 
-        b.benchmark,
-        b.finding_id,
-        b.level,
-        b.cvss,
-        b.title,
-        b.description,
-        b.rationale,
-        b.refs,
-        f.failure,
-        r.due_date,
-        s.scan_date as first_seen,
-        r.state
-    FROM remediations r
-    JOIN benchmark b ON r.benchmark_id = b.id
-    JOIN remediation_findings rf ON r.id = rf.remediation_id
-    JOIN findings f ON rf.finding_id = f.id
-    JOIN scans s ON r.first_seen_scan = s.id
-    WHERE r.state = 'open'
-    ORDER BY r.due_date ASC
-    ''')
-    
-    # Convert rows to dictionaries with column names
-    columns = [column[0] for column in cursor.description]
-    return [dict(zip(columns, row)) for row in cursor.fetchall()]
-
-def get_resolved_remediations(conn):
-    """Get all resolved remediations with their remediation info."""
-    cursor = conn.cursor()
-    cursor.execute('''
-    SELECT 
-        b.benchmark,
-        b.finding_id,
-        b.level,
-        b.cvss,
-        b.title,
-        b.description,
-        b.rationale,
-        b.refs,
-        f.failure,
-        r.due_date,
-        s_first.scan_date as first_seen,
-        s_resolved.scan_date as closed_date,
-        r.state
-    FROM remediations r
-    JOIN benchmark b ON r.benchmark_id = b.id
-    JOIN remediation_findings rf ON r.id = rf.remediation_id
-    JOIN findings f ON rf.finding_id = f.id
-    JOIN scans s_first ON r.first_seen_scan = s_first.id
-    LEFT JOIN scans s_resolved ON r.resolved_in_scan = s_resolved.id
-    WHERE r.state != 'open'
-    ORDER BY s_resolved.scan_date DESC, b.cvss DESC
-    ''')
-    
-    # Convert rows to dictionaries with column names
-    columns = [column[0] for column in cursor.description]
-    return [dict(zip(columns, row)) for row in cursor.fetchall()]
+    SELECT id FROM scans WHERE scan_date = ?
+    ''', (scan_date,))
+    return cursor.fetchone() is not None
 
 
 def get_active_issues(conn):
