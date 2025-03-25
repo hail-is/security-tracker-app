@@ -93,7 +93,10 @@ def process_multiple_scan_upload(file):
         'resolved': 0
     }
     
-    for date in df['Date'].unique():
+    sorted_dates = sorted(df['Date'].unique(), key=lambda x: datetime.strptime(x, '%m/%d/%Y'))
+
+    for date in sorted_dates:
+        print(f"Processing date: {date}")
         date_obj = datetime.strptime(date, '%m/%d/%Y')
         # If we don't already have a scan for this date, create one
         conn = get_db_connection()
