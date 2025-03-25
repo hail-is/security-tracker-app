@@ -84,7 +84,7 @@ def init_db():
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         benchmark_id INTEGER NOT NULL,
         due_date DATE NOT NULL,
-        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        created_at TIMESTAMP NOT NULL,
         status TEXT NOT NULL CHECK (status IN ('open', 'resolved')),
         resolved_at TIMESTAMP,
         FOREIGN KEY (benchmark_id) REFERENCES benchmark(id)
@@ -237,13 +237,13 @@ def mark_remediations_resolved_if_not_in_list(conn, scan_id, active_remediation_
 
     conn.commit()
 
-def create_issue_for_remediations(conn, remediation_ids, benchmark_id, due_date):
+def create_issue_for_remediations(conn, remediation_ids, benchmark_id, created_at, due_date):
     """Create a new issue for a remediation if one doesn't exist."""
     cursor = conn.cursor()
     cursor.execute('''
-    INSERT INTO issues (benchmark_id, due_date, status)
-    VALUES (?, ?, 'open')
-    ''', (benchmark_id, due_date))
+    INSERT INTO issues (benchmark_id, due_date, created_at, status)
+    VALUES (?, ?, ?, 'open')
+    ''', (benchmark_id, due_date, created_at))
     
     issue_id = cursor.lastrowid
     

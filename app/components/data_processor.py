@@ -201,7 +201,7 @@ def process_upload_dataframe(df: pd.DataFrame, analysis_date, column_name_map=No
                     new_count += 1
 
         for (benchmark_id, due_date), remediation_ids in remediations_needing_issues.items():
-            create_issue_for_remediations(conn, remediation_ids, benchmark_id, due_date)
+            create_issue_for_remediations(conn, remediation_ids, benchmark_id, created_at=analysis_date, due_date=due_date)
         
         # Mark findings as resolved if they're not in current upload
         mark_remediations_resolved_if_not_in_list(conn, scan_id, active_remediation_ids)
