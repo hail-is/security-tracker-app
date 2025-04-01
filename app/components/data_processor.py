@@ -8,6 +8,7 @@ from app.database.schema import (
     create_remediation,
     link_finding_to_remediation,
     mark_remediations_resolved_if_not_in_list,
+    mark_issues_as_resolved_if_no_open_remediations,
     create_issue_for_remediations,
     check_if_scan_exists
 )
@@ -205,6 +206,9 @@ def process_upload_dataframe(df: pd.DataFrame, analysis_date, column_name_map=No
         
         # Mark findings as resolved if they're not in current upload
         mark_remediations_resolved_if_not_in_list(conn, scan_id, active_remediation_ids)
+
+        # Mark issues as resolved which no longer have any open remediations
+        mark_issues_as_resolved_if_no_open_remediations(conn, analysis_date)
         
         # Get count of resolved findings in this scan
         cursor = conn.cursor()

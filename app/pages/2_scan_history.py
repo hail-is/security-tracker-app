@@ -144,10 +144,11 @@ if selected_scan:
     st.subheader("New Issues")
     if new_issues:
         new_issues_df = pd.DataFrame(new_issues)
+        new_issues_df['issue_link'] = [f"/issue_detail?id={issue['id']}" for issue in new_issues]
         st.dataframe(
             new_issues_df,
             column_config={
-                "id": st.column_config.NumberColumn("ID", width="small"),
+                "issue_link": st.column_config.LinkColumn("Issue Details", display_text="View", width="small"),
                 "benchmark": st.column_config.TextColumn("Benchmark", width="medium"),
                 "finding_id": st.column_config.TextColumn("Finding ID", width="small"),
                 "level": st.column_config.TextColumn("Level", width="small"),
@@ -158,7 +159,8 @@ if selected_scan:
                 "due_date": st.column_config.DateColumn("Due Date", width="small")
             },
             hide_index=True,
-            use_container_width=True
+            use_container_width=True,
+            column_order=["issue_link", "benchmark", "finding_id", "level", "cvss", "title", "remediation_count", "created_at", "due_date"]
         )
     else:
         st.info("No new issues in this scan.")

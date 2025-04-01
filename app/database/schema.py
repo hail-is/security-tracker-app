@@ -237,6 +237,37 @@ def mark_remediations_resolved_if_not_in_list(conn, scan_id, active_remediation_
 
     conn.commit()
 
+
+def mark_issues_as_resolved_if_no_open_remediations(conn, resolved_date):
+    """Mark issues as resolved if they no longer have any open remediations."""
+    cursor = conn.cursor()
+    cursor.execute('''
+    SELECT i.id
+    FROM issues i
+    WHERE i.status = 'open'
+    AND NOT EXISTS (
+        SELECT 1
+        FROM remediations r
+        JOIN issue_remediations ir ON r.id = ir.remediation_id
+        WHERE r.state = 'open'
+        AND ir.issue_id = i.id
+    )
+    ''', ())
+    
+    issue_ids = [row[0] for row in cursor.fetchall()]
+    print(f"Marking {len(issue_ids)} issues as resolved ({issue_ids})")
+    placeholders = ','.join(['?' for _ in issue_ids])
+
+    if issue_ids:
+        cursor.execute(f'''
+        UPDATE issues
+        SET status = 'resolved', resolved_at = ?
+        WHERE id IN ({placeholders})
+        ''', (resolved_date, *issue_ids))
+
+    conn.commit()
+
+
 def create_issue_for_remediations(conn, remediation_ids, benchmark_id, created_at, due_date):
     """Create a new issue for a remediation if one doesn't exist."""
     cursor = conn.cursor()
