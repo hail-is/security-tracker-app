@@ -1,9 +1,7 @@
 import streamlit as st
 import pandas as pd
-from datetime import datetime
 from app.database.schema import get_db_connection
 from app.components.IssuesTable import render_issues_table
-
 st.set_page_config(
     page_title="Scan History",
     page_icon="🔒",

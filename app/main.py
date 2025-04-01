@@ -5,10 +5,10 @@ import plotly.express as px
 from app.components.data_processor import (
     process_single_scan_upload,
     process_multiple_scan_upload,
-    get_findings_summary,
-    export_issues_to_df
+    get_findings_summary
 )
-from app.components.IssuesTable import render_issues_table
+
+from app.components.IssuesList import render_issues_list
 import os
 import logging
 # Set page config
@@ -44,11 +44,6 @@ def get_due_date_status(due_date: pd.Timestamp):
     elif due_date <= today + timedelta(days=7):
         return "⚠️ ", "warning"
     return "", ""
-
-
-def get_issue_page_link(id: str):
-    """Link to the issue detail page with id as query parameter"""
-    return f'/issue_detail?id={id}'
 
 
 # Header with Upload Button
@@ -205,27 +200,5 @@ with col4:
     )
     st.plotly_chart(fig3, use_container_width=True)
 
-# Issues Tables
-tab1, tab2 = st.tabs(["Active Issues", "Resolved Issues"])
-
-with tab1:
-    active_df = export_issues_to_df(status='open')
-    if not active_df.empty:
-        active_df['details_page'] = active_df['id'].apply(get_issue_page_link)
-        render_issues_table(active_df)
-        
-        # Export button
-        csv = active_df.to_csv(index=False)
-        st.download_button(
-            "Export Active Findings",
-            csv,
-            "active_findings.csv",
-            "text/csv",
-            key='download-active-csv'
-        )
-    else:
-        st.info("No active issues.")
-
-with tab2:
-    # Not implemented yet
-    st.info("Resolved issues not implemented yet")
+# Issues List with Tabs
+render_issues_list()

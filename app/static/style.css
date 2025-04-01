@@ -102,21 +102,30 @@
 /* Tabs styling */
 .stTabs [data-baseweb="tab-list"] {
     gap: 2rem;
+    border-bottom: 1px solid #dee2e6;
 }
 
 .stTabs [data-baseweb="tab"] {
     height: 50px;
     white-space: pre-wrap;
-    background-color: transparent;
-    border-radius: 4px;
+    background-color: transparent !important;
+    border-radius: 0;
     color: #6c757d;
     font-size: 1rem;
     font-weight: 500;
+    border-bottom: 2px solid transparent;
+    padding-bottom: 1rem;
 }
 
 .stTabs [aria-selected="true"] {
-    background-color: #2d63ed !important;
-    color: white !important;
+    background-color: transparent !important;
+    color: #dc3545 !important;
+    border-bottom: 2px solid #dc3545 !important;
+}
+
+.stTabs [data-baseweb="tab"]:hover {
+    color: #dc3545;
+    border-bottom: 2px solid #dc3545;
 }
 
 .charts-container {

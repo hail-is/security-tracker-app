@@ -17,6 +17,7 @@ def get_due_date_status(due_date: pd.Timestamp):
         return "⚠️ ", "warning"
     return "", ""
 
+
 def style_dataframe(df):
     """Apply conditional styling to the dataframe based on due dates."""
     today = datetime.now().date()
@@ -34,6 +35,12 @@ def style_dataframe(df):
         return [''] * len(row)
     
     return df.style.apply(row_style, axis=1)
+
+
+def get_issue_page_link(id: str):
+    """Link to the issue detail page with id as query parameter"""
+    return f'/issue_detail?id={id}'
+
 
 def render_issues_table(
     df: pd.DataFrame,
@@ -62,6 +69,9 @@ def render_issues_table(
     if 'due_date' in df.columns and 'cvss' in df.columns:
         df = df.sort_values(['due_date', 'cvss'], ascending=[True, False])
 
+    # Add issue_link column
+    df['issue_link'] = df['id'].apply(get_issue_page_link)
+
     # Handle pagination if enabled
     if with_pagination:
         total_pages = len(df) // rows_per_page + (1 if len(df) % rows_per_page > 0 else 0)
@@ -78,17 +88,11 @@ def render_issues_table(
             "",
             width="small"
         ),
-        "details_page": st.column_config.LinkColumn(
-            "Details",
-            help="Click to view issue details",
-            display_text="View",
-            width="small"
-        ),
         "issue_link": st.column_config.LinkColumn(
             "Details",
             help="Click to view issue details",
             display_text="View",
-            width="small"
+            width="small",
         ),
         "benchmark": st.column_config.TextColumn(
             "Benchmark",
@@ -144,7 +148,7 @@ def render_issues_table(
     # Define default column order - matching scan details layout
     default_columns = [
         "status_icon", 
-        "details_page" if "details_page" in df.columns else "issue_link",
+        "issue_link",
         "benchmark", "finding_id", 
         "level", "cvss", "title", "remediation_count",
         "created_at", "resolved_at", "due_date", "failure", "first_seen"
