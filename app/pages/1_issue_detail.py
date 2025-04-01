@@ -69,7 +69,19 @@ def get_issue_details(issue_id):
     return issue, remediations
 
 # Get issue ID from URL parameters
-issue_id = st.query_params.get("id", [None])
+issue_id = st.query_params.get("id", None)
+
+# Basic breadcrumbs:
+if issue_id:
+    st.markdown(f"""
+<div style="display: flex; align-items: center; gap: 10px;">
+    <a href="/issue_detail", target="_self">Issues</a>
+    <span style="color: #888;"> > </span>
+    <a href="/issue_detail?id={issue_id}", target="_self">{issue_id}</a>
+</div>
+""", unsafe_allow_html=True)
+
+
 
 if not issue_id:
     st.title("Security Issues")

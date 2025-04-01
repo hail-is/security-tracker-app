@@ -6,10 +6,6 @@ from app.components.IssuesTable import render_issues_table
 def render_issues_list():
     """
     Renders a tabbed interface showing active and resolved issues.
-    
-    Args:
-        get_issue_page_link (callable, optional): Function that takes an issue ID and returns a link URL.
-            If not provided, no links will be added to the issues.
     """
     tab1, tab2 = st.tabs(["Active Issues", "Resolved Issues"])
 
