@@ -35,12 +35,12 @@ def get_due_date_status(due_date: pd.Timestamp):
         return "", ""
     
     today: datetime.date = datetime.now().date()
-    due_date: datetime.date = datetime.strptime(due_date, '%Y-%m-%d 00:00:00').date() if isinstance(due_date, str) else due_date
+    due_date: datetime.date = pd.to_datetime(due_date).date()
     
     # Type safe comparison:
-    if due_date.date() < today:
+    if due_date < today:
         return "❗ ", "overdue"
-    elif due_date.date() <= today + timedelta(days=7):
+    elif due_date <= today + timedelta(days=7):
         return "⚠️ ", "warning"
     return "", ""
 

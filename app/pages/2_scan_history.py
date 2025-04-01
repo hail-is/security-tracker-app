@@ -34,7 +34,7 @@ def get_scan_details(scan_id):
     scan = cursor.fetchone()
     
     if not scan:
-        return None, None, None, None, None
+        return None, None, None, None
     
     # Get new issues from this scan
     cursor.execute('''
