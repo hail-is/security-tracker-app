@@ -169,9 +169,9 @@ else:
     # Basic breadcrumbs
     st.markdown(f"""
     <div style="display: flex; align-items: center; gap: 10px;">
-        <a href="/benchmark_detail", target="_self">Benchmarks</a>
+        <a href="/benchmark_detail" target="_self">Benchmarks</a>
         <span style="color: #888;"> > </span>
-        <a href="/benchmark_detail?id={benchmark_id}", target="_self">{benchmark['finding_id']}</a>
+        <a href="/benchmark_detail?id={benchmark_id}" target="_self">{benchmark['finding_id']}</a>
     </div>
     """, unsafe_allow_html=True)
     
