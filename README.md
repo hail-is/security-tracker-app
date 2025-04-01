@@ -1,6 +1,6 @@
 # Security Findings Tracker
 
-A Streamlit-based application for tracking and managing security findings from weekly CSV uploads. The application provides a modern, intuitive interface for analyzing security findings, tracking their status, and managing their lifecycle.
+A Streamlit-based application for tracking and managing security findings from weekly CSV uploads. The application provides an interface for analyzing security findings, tracking their status, and managing their lifecycle.
 
 ## Requirements
 
