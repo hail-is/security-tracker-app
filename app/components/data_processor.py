@@ -151,7 +151,7 @@ def process_upload_dataframe(df: pd.DataFrame, analysis_date, column_name_map=No
                 row[column_name_map['benchmark']],
                 row[column_name_map['id']],  # This is the finding_id from CSV
                 row[column_name_map['level']],
-                float(row[column_name_map['cvss']]) if row[column_name_map['cvss']] else None,
+                float(row[column_name_map['cvss']]) if row[column_name_map['cvss']] else 0.0,
                 row[column_name_map['title']],
                 row[column_name_map['description']],
                 row[column_name_map['rationale']],

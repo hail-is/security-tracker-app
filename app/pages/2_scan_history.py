@@ -1,8 +1,7 @@
 import streamlit as st
 import pandas as pd
-from datetime import datetime
 from app.database.schema import get_db_connection
-
+from app.components.IssuesTable import render_issues_table
 st.set_page_config(
     page_title="Scan History",
     page_icon="🔒",
@@ -81,29 +80,38 @@ def get_scan_details(scan_id):
     ''', (scan['scan_date'],))
     closed_issues = [dict(row) for row in cursor.fetchall()]
     
-    # Get findings resolved in this scan
+    # Get issues with remediations which were resolved in this scan
     cursor.execute('''
     SELECT 
+        i.id,
+        i.due_date,
+        i.created_at,
+        i.resolved_at,
         b.benchmark,
         b.finding_id,
         b.level,
         b.cvss,
         b.title,
-        f.failure,
-        r.due_date,
-        s_first.scan_date as first_seen
-    FROM remediations r
-    JOIN benchmark b ON r.benchmark_id = b.id
-    JOIN remediation_findings rf ON r.id = rf.remediation_id
-    JOIN findings f ON rf.finding_id = f.id
-    JOIN scans s_first ON r.first_seen_scan = s_first.id
-    WHERE r.resolved_in_scan = ?
+        COUNT(DISTINCT r.id) as remediation_count
+    FROM issues i
+    JOIN benchmark b ON i.benchmark_id = b.id
+    JOIN issue_remediations ir ON i.id = ir.issue_id
+    JOIN remediations r ON ir.remediation_id = r.id
+    WHERE EXISTS (
+        SELECT 1
+        FROM issues i2
+        JOIN issue_remediations ir2 ON i2.id = ir2.issue_id
+        JOIN remediations r2 ON ir2.remediation_id = r2.id
+        WHERE i2.id = i.id
+        AND r2.resolved_in_scan = ?
+    )
+    GROUP BY i.id
     ORDER BY b.cvss DESC
     ''', (scan_id,))
-    resolved_findings = [dict(row) for row in cursor.fetchall()]
+    issues_with_resolved_findings = [dict(row) for row in cursor.fetchall()]
     
     conn.close()
-    return scan, new_issues, closed_issues, resolved_findings
+    return scan, new_issues, closed_issues, issues_with_resolved_findings
 
 # Get list of all scans
 scans = get_all_scans()
@@ -121,7 +129,7 @@ selected_scan = st.selectbox(
 )
 
 if selected_scan:
-    scan, new_issues, closed_issues, resolved_findings = get_scan_details(selected_scan['id'])
+    scan, new_issues, closed_issues, issues_with_resolved_findings = get_scan_details(selected_scan['id'])
     
     if not scan:
         st.error(f"Scan {selected_scan['id']} not found.")
@@ -137,7 +145,7 @@ if selected_scan:
     with col2:
         st.metric("Closed Issues", len(closed_issues))
     with col3:
-        st.metric("Resolved Findings", len(resolved_findings))
+        st.metric("Issues with Resolved Findings", len(issues_with_resolved_findings))
     
     # New Issues
     st.divider()
@@ -145,23 +153,7 @@ if selected_scan:
     if new_issues:
         new_issues_df = pd.DataFrame(new_issues)
         new_issues_df['issue_link'] = [f"/issue_detail?id={issue['id']}" for issue in new_issues]
-        st.dataframe(
-            new_issues_df,
-            column_config={
-                "issue_link": st.column_config.LinkColumn("Issue Details", display_text="View", width="small"),
-                "benchmark": st.column_config.TextColumn("Benchmark", width="medium"),
-                "finding_id": st.column_config.TextColumn("Finding ID", width="small"),
-                "level": st.column_config.TextColumn("Level", width="small"),
-                "cvss": st.column_config.NumberColumn("CVSS", format="%.1f", width="small"),
-                "title": st.column_config.TextColumn("Title", width="large"),
-                "remediation_count": st.column_config.NumberColumn("Remediations", width="small"),
-                "created_at": st.column_config.DateColumn("Created", width="small"),
-                "due_date": st.column_config.DateColumn("Due Date", width="small")
-            },
-            hide_index=True,
-            use_container_width=True,
-            column_order=["issue_link", "benchmark", "finding_id", "level", "cvss", "title", "remediation_count", "created_at", "due_date"]
-        )
+        render_issues_table(new_issues_df)
     else:
         st.info("No new issues in this scan.")
     
@@ -170,45 +162,15 @@ if selected_scan:
     st.subheader("Closed Issues")
     if closed_issues:
         closed_issues_df = pd.DataFrame(closed_issues)
-        st.dataframe(
-            closed_issues_df,
-            column_config={
-                "id": st.column_config.NumberColumn("ID", width="small"),
-                "benchmark": st.column_config.TextColumn("Benchmark", width="medium"),
-                "finding_id": st.column_config.TextColumn("Finding ID", width="small"),
-                "level": st.column_config.TextColumn("Level", width="small"),
-                "cvss": st.column_config.NumberColumn("CVSS", format="%.1f", width="small"),
-                "title": st.column_config.TextColumn("Title", width="large"),
-                "remediation_count": st.column_config.NumberColumn("Remediations", width="small"),
-                "created_at": st.column_config.DateColumn("Created", width="small"),
-                "resolved_at": st.column_config.DateColumn("Resolved", width="small"),
-                "due_date": st.column_config.DateColumn("Due Date", width="small")
-            },
-            hide_index=True,
-            use_container_width=True
-        )
+        render_issues_table(closed_issues_df)
     else:
         st.info("No issues were closed in this scan.")
     
     # Resolved Findings
     st.divider()
-    st.subheader("Resolved Findings")
-    if resolved_findings:
-        resolved_findings_df = pd.DataFrame(resolved_findings)
-        st.dataframe(
-            resolved_findings_df,
-            column_config={
-                "benchmark": st.column_config.TextColumn("Benchmark", width="medium"),
-                "finding_id": st.column_config.TextColumn("Finding ID", width="small"),
-                "level": st.column_config.TextColumn("Level", width="small"),
-                "cvss": st.column_config.NumberColumn("CVSS", format="%.1f", width="small"),
-                "title": st.column_config.TextColumn("Title", width="large"),
-                "failure": st.column_config.TextColumn("Failure", width="large"),
-                "first_seen": st.column_config.DateColumn("First Seen", width="small"),
-                "due_date": st.column_config.DateColumn("Due Date", width="small")
-            },
-            hide_index=True,
-            use_container_width=True
-        )
+    st.subheader("Issues with Resolved Findings")
+    if issues_with_resolved_findings:
+        issues_with_resolved_findings_df = pd.DataFrame(issues_with_resolved_findings)
+        render_issues_table(issues_with_resolved_findings_df)
     else:
         st.info("No findings were resolved in this scan.") 

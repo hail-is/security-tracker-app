@@ -5,9 +5,10 @@ import plotly.express as px
 from app.components.data_processor import (
     process_single_scan_upload,
     process_multiple_scan_upload,
-    get_findings_summary,
-    export_issues_to_df
+    get_findings_summary
 )
+
+from app.components.IssuesList import render_issues_list
 import os
 import logging
 # Set page config
@@ -43,11 +44,6 @@ def get_due_date_status(due_date: pd.Timestamp):
     elif due_date <= today + timedelta(days=7):
         return "⚠️ ", "warning"
     return "", ""
-
-
-def get_issue_page_link(id: str):
-    """Link to the issue detail page with id as query parameter"""
-    return f'/issue_detail?id={id}'
 
 
 # Header with Upload Button
@@ -204,113 +200,5 @@ with col4:
     )
     st.plotly_chart(fig3, use_container_width=True)
 
-# Issues Tables
-tab1, tab2 = st.tabs(["Active Issues", "Resolved Issues"])
-
-ROWS_PER_PAGE = 5
-
-with tab1:
-    active_df = export_issues_to_df(status='open')
-    if not active_df.empty:
-        # Add status indicators
-        active_df['status_icon'], active_df['status'] = zip(*active_df['due_date'].apply(get_due_date_status))
-        active_df['details_page'] = active_df['id'].apply(get_issue_page_link)
-
-        # Sort by due_date and cvss
-        active_df = active_df.sort_values(['due_date', 'cvss'], ascending=[True, False])
-        
-        # Create style conditions for row highlighting
-        def style_dataframe(df):
-            today = datetime.now().date()
-            
-            def row_style(row):
-                due_date = row['due_date'].date() if isinstance(row['due_date'], pd.Timestamp) else datetime.strptime(row['due_date'], '%Y-%m-%d 00:00:00').date()
-                
-                if due_date < today:
-                    return ['background-color: #f8d7da'] * len(row)
-                elif due_date <= today + timedelta(days=7):
-                    return ['background-color: #fff3cd'] * len(row)
-                return [''] * len(row)
-            
-            return df.style.apply(row_style, axis=1)
-        
-        # Pagination
-        total_pages = len(active_df) // ROWS_PER_PAGE + (1 if len(active_df) % ROWS_PER_PAGE > 0 else 0)
-        page = st.session_state.get(f"page_active", 0)
-        start_idx = page * ROWS_PER_PAGE
-        end_idx = start_idx + ROWS_PER_PAGE
-        
-        # Apply styling to the visible portion of the dataframe
-        visible_df = active_df.iloc[start_idx:end_idx].copy()
-        styled_df = style_dataframe(visible_df)
-        
-
-        # Create the dataframe display
-        st.dataframe(
-            styled_df,
-            column_config={
-                "status_icon": st.column_config.TextColumn(
-                    "",
-                ),
-                "details_page": st.column_config.LinkColumn(
-                    "Details",
-                    help="Click to view issue details",
-                    display_text="View",
-                    width="small"
-                ),
-                "level": st.column_config.TextColumn(
-                    "Level",
-                    help="Finding severity level",
-                ),
-                "cvss": st.column_config.NumberColumn(
-                    "CVSS",
-                    help="CVSS score",
-                    format="%.1f"
-                ),
-                "due_date": st.column_config.DateColumn(
-                    "Due Date",
-                    format="YYYY-MM-DD",
-                ),
-                "title": st.column_config.TextColumn(
-                    "Title",
-                    help="Finding title"
-                ),
-                "description": st.column_config.TextColumn(
-                    "Description",
-                    help="Finding description"
-                ),
-            },
-            hide_index=True,
-            column_order=["status_icon", "details_page", "due_date", "level", "cvss", "title", "description"],
-            row_height=100,
-            height=550,
-        )
-
-        # Pagination controls in columns for better layout
-        col1, col2, col3 = st.columns([1, 2, 1])
-        with col1:
-            if st.button("← Previous", disabled=(page == 0)):
-                st.session_state[f"page_active"] = max(0, page - 1)
-                st.rerun()
-        with col2:
-            st.markdown(f"Page {page + 1} of {total_pages}")
-        with col3:
-            if st.button("Next →", disabled=(page >= total_pages - 1)):
-                st.session_state[f"page_active"] = min(total_pages - 1, page + 1)
-                st.rerun()
-        
-        # Export button
-        csv = active_df.to_csv(index=False)
-        st.download_button(
-            "Export Active Findings",
-            csv,
-            "active_findings.csv",
-            "text/csv",
-            key='download-active-csv'
-        )
-    else:
-        st.info("No active issues.")
-
-with tab2:
-    # Not implemented yet
-    st.info("Resolved issues not implemented yet")
+# Issues List with Tabs
+render_issues_list()
