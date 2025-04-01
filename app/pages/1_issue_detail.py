@@ -75,9 +75,9 @@ issue_id = st.query_params.get("id", None)
 if issue_id:
     st.markdown(f"""
 <div style="display: flex; align-items: center; gap: 10px;">
-    <a href="/issue_detail", target="_self">Issues</a>
+    <a href="/issue_detail" target="_self">Issues</a>
     <span style="color: #888;"> > </span>
-    <a href="/issue_detail?id={issue_id}", target="_self">{issue_id}</a>
+    <a href="/issue_detail?id={issue_id}" target="_self">{issue_id}</a>
 </div>
 """, unsafe_allow_html=True)
 
