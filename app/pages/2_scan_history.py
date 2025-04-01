@@ -2,6 +2,7 @@ import streamlit as st
 import pandas as pd
 from datetime import datetime
 from app.database.schema import get_db_connection
+from app.components.IssuesTable import render_issues_table
 
 st.set_page_config(
     page_title="Scan History",
@@ -145,23 +146,7 @@ if selected_scan:
     if new_issues:
         new_issues_df = pd.DataFrame(new_issues)
         new_issues_df['issue_link'] = [f"/issue_detail?id={issue['id']}" for issue in new_issues]
-        st.dataframe(
-            new_issues_df,
-            column_config={
-                "issue_link": st.column_config.LinkColumn("Issue Details", display_text="View", width="small"),
-                "benchmark": st.column_config.TextColumn("Benchmark", width="medium"),
-                "finding_id": st.column_config.TextColumn("Finding ID", width="small"),
-                "level": st.column_config.TextColumn("Level", width="small"),
-                "cvss": st.column_config.NumberColumn("CVSS", format="%.1f", width="small"),
-                "title": st.column_config.TextColumn("Title", width="large"),
-                "remediation_count": st.column_config.NumberColumn("Remediations", width="small"),
-                "created_at": st.column_config.DateColumn("Created", width="small"),
-                "due_date": st.column_config.DateColumn("Due Date", width="small")
-            },
-            hide_index=True,
-            use_container_width=True,
-            column_order=["issue_link", "benchmark", "finding_id", "level", "cvss", "title", "remediation_count", "created_at", "due_date"]
-        )
+        render_issues_table(new_issues_df)
     else:
         st.info("No new issues in this scan.")
     
@@ -170,23 +155,7 @@ if selected_scan:
     st.subheader("Closed Issues")
     if closed_issues:
         closed_issues_df = pd.DataFrame(closed_issues)
-        st.dataframe(
-            closed_issues_df,
-            column_config={
-                "id": st.column_config.NumberColumn("ID", width="small"),
-                "benchmark": st.column_config.TextColumn("Benchmark", width="medium"),
-                "finding_id": st.column_config.TextColumn("Finding ID", width="small"),
-                "level": st.column_config.TextColumn("Level", width="small"),
-                "cvss": st.column_config.NumberColumn("CVSS", format="%.1f", width="small"),
-                "title": st.column_config.TextColumn("Title", width="large"),
-                "remediation_count": st.column_config.NumberColumn("Remediations", width="small"),
-                "created_at": st.column_config.DateColumn("Created", width="small"),
-                "resolved_at": st.column_config.DateColumn("Resolved", width="small"),
-                "due_date": st.column_config.DateColumn("Due Date", width="small")
-            },
-            hide_index=True,
-            use_container_width=True
-        )
+        render_issues_table(closed_issues_df)
     else:
         st.info("No issues were closed in this scan.")
     
@@ -195,20 +164,6 @@ if selected_scan:
     st.subheader("Resolved Findings")
     if resolved_findings:
         resolved_findings_df = pd.DataFrame(resolved_findings)
-        st.dataframe(
-            resolved_findings_df,
-            column_config={
-                "benchmark": st.column_config.TextColumn("Benchmark", width="medium"),
-                "finding_id": st.column_config.TextColumn("Finding ID", width="small"),
-                "level": st.column_config.TextColumn("Level", width="small"),
-                "cvss": st.column_config.NumberColumn("CVSS", format="%.1f", width="small"),
-                "title": st.column_config.TextColumn("Title", width="large"),
-                "failure": st.column_config.TextColumn("Failure", width="large"),
-                "first_seen": st.column_config.DateColumn("First Seen", width="small"),
-                "due_date": st.column_config.DateColumn("Due Date", width="small")
-            },
-            hide_index=True,
-            use_container_width=True
-        )
+        render_issues_table(resolved_findings_df)
     else:
         st.info("No findings were resolved in this scan.") 
