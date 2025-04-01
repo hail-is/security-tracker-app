@@ -80,29 +80,38 @@ def get_scan_details(scan_id):
     ''', (scan['scan_date'],))
     closed_issues = [dict(row) for row in cursor.fetchall()]
     
-    # Get findings resolved in this scan
+    # Get issues with remediations which were resolved in this scan
     cursor.execute('''
     SELECT 
+        i.id,
+        i.due_date,
+        i.created_at,
+        i.resolved_at,
         b.benchmark,
         b.finding_id,
         b.level,
         b.cvss,
         b.title,
-        f.failure,
-        r.due_date,
-        s_first.scan_date as first_seen
-    FROM remediations r
-    JOIN benchmark b ON r.benchmark_id = b.id
-    JOIN remediation_findings rf ON r.id = rf.remediation_id
-    JOIN findings f ON rf.finding_id = f.id
-    JOIN scans s_first ON r.first_seen_scan = s_first.id
-    WHERE r.resolved_in_scan = ?
+        COUNT(DISTINCT r.id) as remediation_count
+    FROM issues i
+    JOIN benchmark b ON i.benchmark_id = b.id
+    JOIN issue_remediations ir ON i.id = ir.issue_id
+    JOIN remediations r ON ir.remediation_id = r.id
+    WHERE EXISTS (
+        SELECT 1
+        FROM issues i2
+        JOIN issue_remediations ir2 ON i2.id = ir2.issue_id
+        JOIN remediations r2 ON ir2.remediation_id = r2.id
+        WHERE i2.id = i.id
+        AND r2.resolved_in_scan = ?
+    )
+    GROUP BY i.id
     ORDER BY b.cvss DESC
     ''', (scan_id,))
-    resolved_findings = [dict(row) for row in cursor.fetchall()]
+    issues_with_resolved_findings = [dict(row) for row in cursor.fetchall()]
     
     conn.close()
-    return scan, new_issues, closed_issues, resolved_findings
+    return scan, new_issues, closed_issues, issues_with_resolved_findings
 
 # Get list of all scans
 scans = get_all_scans()
@@ -120,7 +129,7 @@ selected_scan = st.selectbox(
 )
 
 if selected_scan:
-    scan, new_issues, closed_issues, resolved_findings = get_scan_details(selected_scan['id'])
+    scan, new_issues, closed_issues, issues_with_resolved_findings = get_scan_details(selected_scan['id'])
     
     if not scan:
         st.error(f"Scan {selected_scan['id']} not found.")
@@ -136,7 +145,7 @@ if selected_scan:
     with col2:
         st.metric("Closed Issues", len(closed_issues))
     with col3:
-        st.metric("Resolved Findings", len(resolved_findings))
+        st.metric("Issues with Resolved Findings", len(issues_with_resolved_findings))
     
     # New Issues
     st.divider()
@@ -159,9 +168,9 @@ if selected_scan:
     
     # Resolved Findings
     st.divider()
-    st.subheader("Resolved Findings")
-    if resolved_findings:
-        resolved_findings_df = pd.DataFrame(resolved_findings)
-        render_issues_table(resolved_findings_df)
+    st.subheader("Issues with Resolved Findings")
+    if issues_with_resolved_findings:
+        issues_with_resolved_findings_df = pd.DataFrame(issues_with_resolved_findings)
+        render_issues_table(issues_with_resolved_findings_df)
     else:
         st.info("No findings were resolved in this scan.") 
