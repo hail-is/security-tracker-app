@@ -180,6 +180,27 @@ def check_if_scan_exists(conn, scan_date):
     ''', (scan_date,))
     return cursor.fetchone() is not None
 
+def check_if_scan_date_is_newer_than_db_scans(conn, scan_date):
+    """Check if a scan is newer than the most recent scan."""
+    cursor = conn.cursor()
+    cursor.execute('''
+    SELECT max(scan_date) FROM scans
+    ''')
+
+    result = cursor.fetchone()
+
+    if result is None or result[0] is None or result[0] == '':
+        print(f"** No scans found; assuming {scan_date} is the most recent scan")
+        return True
+    else:
+        db_scan_date_object = datetime.strptime(result[0], '%Y-%m-%d 00:00:00')
+        if db_scan_date_object.date() < scan_date.date():
+            print(f"** Scan on {scan_date} is newer than the most recent scan ({result[0]}); processing")
+            return True
+        else:
+            print(f"** Scan on {scan_date} is older than the most recent scan ({result[0]}); skipping")
+            return False
+            
 
 def get_active_issues(conn):
     """Get all active issues."""
