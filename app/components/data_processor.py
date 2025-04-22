@@ -10,7 +10,7 @@ from app.database.schema import (
     mark_remediations_resolved_if_not_in_list,
     mark_issues_as_resolved_if_no_open_remediations,
     create_issue_for_remediations,
-    check_if_scan_exists
+    check_if_scan_date_is_newer_than_db_scans
 )
 
 def get_cvss_range(cvss):
@@ -98,19 +98,13 @@ def process_multiple_scan_upload(file):
 
     for date in sorted_dates:
         print(f"Processing date: {date}")
-        date_obj = datetime.strptime(date, '%m/%d/%Y')
-        # If we don't already have a scan for this date, create one
-        conn = get_db_connection()
-        if not check_if_scan_exists(conn, date_obj):
-            this_data = df[df['Date'] == date]
-            this_update = process_upload_dataframe(this_data, date_obj.strftime('%Y-%m-%d 00:00:00'), column_name_map)
-            results['new'] += this_update['new']
-            results['existing'] += this_update['existing']
-            results['resolved'] += this_update['resolved']
-        else:
-            # Just log an continue
-            print(f"Scan already exists for {date}, skipping")
-            continue
+        reformatted_date = datetime.strptime(date, '%m/%d/%Y').strftime('%Y-%m-%d 00:00:00')
+        
+        this_data = df[df['Date'] == date]
+        this_update = process_upload_dataframe(this_data, reformatted_date, column_name_map)
+        results['new'] += this_update['new']
+        results['existing'] += this_update['existing']
+        results['resolved'] += this_update['resolved']
 
 
     return results
@@ -119,6 +113,17 @@ def process_multiple_scan_upload(file):
 
 def process_upload_dataframe(df: pd.DataFrame, analysis_date, column_name_map=None) -> dict:
     """Process a dataframe of uploaded CSV file and update database."""
+    
+    conn = get_db_connection()
+
+    if not check_if_scan_date_is_newer_than_db_scans(conn, datetime.strptime(analysis_date, '%Y-%m-%d 00:00:00')):
+        print(f"Scan on {analysis_date} predates the most recent scan; skipping")
+        return {
+            'new': 0,
+            'existing': 0,
+            'resolved': 0
+        }
+    
     required_columns = [
         'benchmark', 'id', 'level', 'cvss', 'title',
         'failures', 'description', 'rationale', 'refs'
@@ -132,7 +137,6 @@ def process_upload_dataframe(df: pd.DataFrame, analysis_date, column_name_map=No
         missing_cols = [column_name_map.get(col) for col in required_columns if column_name_map.get(col) not in df.columns]
         raise ValueError(f"Missing required columns: {', '.join(missing_cols)}")
     
-    conn = get_db_connection()
     active_finding_ids = set()
     new_count = 0
     existing_count = 0
