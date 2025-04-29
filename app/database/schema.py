@@ -103,6 +103,16 @@ def init_db():
     )
     ''')
     
+    # Create poam_config table
+    cursor.execute('''
+    CREATE TABLE IF NOT EXISTS poam_config (
+        id INTEGER PRIMARY KEY,
+        point_of_contact TEXT NOT NULL,
+        google_project TEXT NOT NULL,
+        service_name TEXT NOT NULL
+    )
+    ''')
+    
     conn.commit()
     conn.close()
 
@@ -305,6 +315,27 @@ def create_issue_for_remediations(conn, remediation_ids, benchmark_id, created_a
         VALUES (?, ?)
         ''', (issue_id, remediation_id))
     
+    conn.commit()
+
+def get_poam_config(conn):
+    """Get the POAM export configuration."""
+    cursor = conn.cursor()
+    cursor.execute('SELECT * FROM poam_config LIMIT 1')
+    result = cursor.fetchone()
+    if result:
+        return dict(result)
+    return None
+
+def update_poam_config(conn, point_of_contact, google_project, service_name):
+    """Update the POAM export configuration."""
+    cursor = conn.cursor()
+    cursor.execute('''
+    INSERT OR REPLACE INTO poam_config (
+        id, point_of_contact, google_project, service_name
+    ) VALUES (
+        1, ?, ?, ?
+    )
+    ''', (point_of_contact, google_project, service_name))
     conn.commit()
 
 # Initialize the database when the module is imported
