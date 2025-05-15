@@ -14,6 +14,7 @@ from tools.poam import PoamFile
 from tools.github import download_trivy_alerts
 from tools.trivy.alerts import convert_alerts_to_poam
 from tools.trivy.importer import import_alerts_from_csv
+from tools.trivy.diff import compare_findings_to_trivy_poams
 
 @click.group()
 def cli():
@@ -130,6 +131,38 @@ def import_alerts(csv_file: Path):
         
     except Exception as e:
         click.echo(f"Error importing alerts: {str(e)}", err=True)
+        sys.exit(1)
+
+@cli.command()
+@click.argument('poam_file', type=click.Path(exists=True, path_type=Path))
+@click.argument('alerts_csv', type=click.Path(exists=True, path_type=Path))
+def alerts_diff(poam_file: Path, alerts_csv: Path):
+    """
+    Compare Trivy alerts from CSV against existing POAMs.
+    
+    POAM_FILE: Excel file containing existing POAMs
+    ALERTS_CSV: CSV file containing current Trivy alerts
+    
+    Shows:
+    - New findings that need POAMs created
+    - Existing findings that already have POAMs
+    - Closed POAMs that no longer have corresponding findings
+    """
+    try:
+        # Import findings from CSV
+        findings = import_alerts_from_csv(alerts_csv)
+        if not findings:
+            click.echo("No findings found in CSV file", err=True)
+            sys.exit(1)
+            
+        # Compare findings against POAMs
+        diff = compare_findings_to_trivy_poams(findings, poam_file)
+        
+        # Print results
+        diff.print_summary()
+        
+    except Exception as e:
+        click.echo(f"Error comparing alerts: {str(e)}", err=True)
         sys.exit(1)
 
 if __name__ == '__main__':

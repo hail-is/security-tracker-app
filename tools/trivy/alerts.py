@@ -15,7 +15,7 @@ ALERTS_TO_POAM_QUERY = """
     "_state": .state,
     "Alert ID": .number, 
     "Controls": "RA-5",
-    "Weakness Name": .rule.description,
+    "Weakness Name": (.rule.description + "; " + .rule.id),
     "Weakness Description": .rule.full_description,
     "Weakness Detector Source": .html_url,
     "Weakness Source Identifier": (.tool.name + " " + .tool.version),

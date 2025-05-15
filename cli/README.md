@@ -10,6 +10,50 @@ Ensure you have Python 3.x installed and the required dependencies:
 pip install -r requirements.txt
 ```
 
+## Testing
+
+To run the tests, first install pytest and coverage tools:
+
+```bash
+pip install pytest pytest-cov
+```
+
+The project uses a standard Python test layout:
+```
+security-tracker-app/
+├── tests/
+│   ├── __init__.py
+│   ├── conftest.py      # Test configuration and fixtures
+│   └── test_poam.py     # Tests for POAM functionality
+├── tools/
+│   ├── __init__.py
+│   ├── poam.py
+│   └── ...
+└── cli/
+    └── ...
+```
+
+Then run the tests:
+
+```bash
+# Run all tests
+pytest tests/
+
+# Run specific test file
+pytest tests/test_poam.py
+
+# Run with verbose output
+pytest tests/test_poam.py -v
+
+# Run tests and show coverage
+pytest tests/ --cov=tools
+```
+
+The test suite includes:
+- Unit tests for data conversion utilities
+- Field name handling for POAM entries
+- Edge cases for text formatting
+
 ## Commands
 
 ### Download Alerts
@@ -53,6 +97,25 @@ This command:
 - Converts each row into a Finding object
 - Displays the first finding in YAML format for review
 
+### Compare Alerts with POAMs
+
+Compare current Trivy alerts against existing POAMs:
+
+```bash
+./cli.py alerts-diff <poam_file> <alerts_csv>
+```
+
+This command:
+- Reads existing POAMs from an Excel file
+- Compares them against current findings from a CSV file
+- Shows:
+  - New findings that need POAMs created
+  - Existing findings that already have POAMs (with confidence scores)
+  - Closed POAMs that no longer have corresponding findings
+- Matching is done based on:
+  - Weakness name similarity
+  - Asset identifier matching
+
 ### Preview Trivy POAMs
 
 Preview POAMs from an Excel file:
@@ -78,7 +141,12 @@ This command:
    ./cli.py convert-alerts alerts_20240513.json
    ```
 
-3. Import and verify the converted alerts:
+3. Compare new alerts against existing POAMs:
+   ```bash
+   ./cli.py alerts-diff existing_poams.xlsx working/trivy_alerts_20240513_180947.csv
+   ```
+
+4. Import and verify specific alerts:
    ```bash
    ./cli.py import-alerts working/trivy_alerts_20240513_180947.csv
    ```

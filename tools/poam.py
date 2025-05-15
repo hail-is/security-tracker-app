@@ -9,7 +9,37 @@ from dataclasses import dataclass
 from datetime import datetime
 from typing import Optional
 
-@dataclass
+def convert_to_snake_case(text: str) -> str:
+    """
+    Convert a string to snake_case format.
+    
+    Args:
+        text: Input string in any format (e.g., "Weakness Name", "POAM ID", etc.)
+        
+    Returns:
+        String converted to snake_case format
+    
+    Examples:
+        >>> convert_to_snake_case("Weakness Name")
+        'weakness_name'
+        >>> convert_to_snake_case("POAM ID")
+        'poam_id'
+        >>> convert_to_snake_case("Auto-Approve")
+        'auto_approve'
+    """
+    if not text:
+        return text
+        
+    # Replace hyphens with spaces
+    text = text.replace('-', ' ')
+    
+    # Normalize spaces (remove extra spaces)
+    text = ' '.join(text.split())
+    
+    # Convert to lowercase and replace spaces with underscores
+    return text.strip().lower().replace(' ', '_')
+
+@dataclass(frozen=True)
 class PoamEntry:
     """Represents a single POAM entry."""
     poam_id: str
@@ -44,6 +74,16 @@ class PoamEntry:
     cve: Optional[str]
     service_name: str
 
+    def __hash__(self) -> int:
+        """Make PoamEntry hashable based on its poam_id."""
+        return hash(self.poam_id)
+
+    def __eq__(self, other) -> bool:
+        """Define equality based on poam_id."""
+        if not isinstance(other, PoamEntry):
+            return NotImplemented
+        return self.poam_id == other.poam_id
+
     @classmethod
     def from_dict(cls, data: dict) -> 'PoamEntry':
         """Create a PoamEntry from a dictionary, handling timestamp conversion."""
@@ -77,10 +117,10 @@ class PoamEntry:
             data['poam_id'] = data.pop('POAM ID')
 
         # Convert keys to snake_case
-        converted_data = {}
-        for key, value in data.items():
-            snake_key = ''.join(['_' + c.lower() if c.isupper() else c.lower() for c in key]).lstrip('_')
-            converted_data[snake_key] = value
+        converted_data = {
+            convert_to_snake_case(key): value 
+            for key, value in data.items()
+        }
 
         return cls(**converted_data)
 
