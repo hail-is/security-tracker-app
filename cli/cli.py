@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 
+import json
 import click
 import sys
 import os
@@ -160,6 +161,12 @@ def alerts_diff(poam_file: Path, alerts_csv: Path):
         
         # Print results
         diff.print_summary()
+
+        # JSON output file path:
+        json_output_file = alerts_csv.with_suffix('.diff.json')
+        with open(json_output_file, 'w') as f:
+            json.dump(diff.to_json(), f)
+        click.echo(f"JSON output saved to: {json_output_file}")
         
     except Exception as e:
         click.echo(f"Error comparing alerts: {str(e)}", err=True)
