@@ -1,0 +1,171 @@
+"""
+Tool for handling POAM Excel files.
+"""
+import pandas as pd
+import re
+import yaml
+from pathlib import Path
+from dataclasses import dataclass
+from datetime import datetime
+from typing import Optional
+
+@dataclass
+class PoamEntry:
+    """Represents a single POAM entry."""
+    poam_id: str
+    controls: str
+    weakness_name: str
+    weakness_description: str
+    weakness_detector_source: str
+    weakness_source_identifier: str
+    asset_identifier: str
+    point_of_contact: str
+    resources_required: Optional[str]
+    overall_remediation_plan: str
+    original_detection_date: datetime
+    scheduled_completion_date: datetime
+    planned_milestones: str
+    milestone_changes: str
+    status_date: datetime
+    vendor_dependency: str
+    last_vendor_check_in_date: Optional[datetime]
+    vendor_dependent_product_name: str
+    original_risk_rating: str
+    adjusted_risk_rating: Optional[str]
+    risk_adjustment: str
+    false_positive: str
+    operational_requirement: str
+    deviation_rationale: Optional[str]
+    supporting_documents: Optional[str]
+    comments: Optional[str]
+    auto_approve: str
+    binding_operational_directive_22_01_tracking: str
+    binding_operational_directive_22_01_due_date: Optional[datetime]
+    cve: Optional[str]
+    service_name: str
+
+    @classmethod
+    def from_dict(cls, data: dict) -> 'PoamEntry':
+        """Create a PoamEntry from a dictionary, handling timestamp conversion."""
+        # Convert pandas timestamps to datetime
+        date_fields = [
+            'original_detection_date',
+            'scheduled_completion_date',
+            'status_date',
+            'last_vendor_check_in_date',
+            'binding_operational_directive_22_01_due_date'
+        ]
+        
+        for field in date_fields:
+            if field in data and pd.notna(data[field]):
+                if isinstance(data[field], pd._libs.tslibs.timestamps.Timestamp):
+                    data[field] = data[field].to_pydatetime()
+            else:
+                data[field] = None
+
+        # Convert NaN to None for optional fields
+        for key, value in data.items():
+            if pd.isna(value):
+                data[key] = None
+            elif isinstance(value, float) and key != 'comments':  # Keep numeric comments
+                data[key] = str(int(value)) if value.is_integer() else str(value)
+            elif isinstance(value, str):
+                data[key] = value.strip()
+
+        # Rename POAM ID field if necessary
+        if 'POAM ID' in data:
+            data['poam_id'] = data.pop('POAM ID')
+
+        # Convert keys to snake_case
+        converted_data = {}
+        for key, value in data.items():
+            snake_key = ''.join(['_' + c.lower() if c.isupper() else c.lower() for c in key]).lstrip('_')
+            converted_data[snake_key] = value
+
+        return cls(**converted_data)
+
+class PoamFile:
+    """Handler for POAM Excel files with specific support for Trivy findings."""
+    
+    def __init__(self, file_path: str):
+        """
+        Initialize a POAM file handler.
+        
+        Args:
+            file_path: Path to the XLSX file
+        """
+        self.file_path = Path(file_path)
+        if not self.file_path.exists():
+            raise FileNotFoundError(f"POAM file not found: {file_path}")
+        
+        # Load the Excel file
+        self.workbook = pd.ExcelFile(self.file_path)
+        
+        # Validate required sheet exists
+        if "Open POA&M Items" not in self.workbook.sheet_names:
+            raise ValueError('Excel file must contain "Open POA&M Items" sheet')
+        
+        # Load the data with headers in row 5 (0-based index is 4)
+        self.df = pd.read_excel(
+            self.workbook,
+            sheet_name="Open POA&M Items",
+            header=4,  # 0-based index for row 5
+            engine='openpyxl'
+        )
+    
+    def get_trivy_poams(self) -> pd.DataFrame:
+        """
+        Filter and return Trivy POAMs.
+        
+        Returns:
+            DataFrame containing only Trivy POAMs
+        """
+        # Pattern matches YYYY-TRIVYXXXX where XXXX is 4 or more digits
+        trivy_pattern = r'^\d{4}-TRIVY\d{4,}$'
+        
+        # Filter for POAM IDs matching the Trivy pattern
+        return self.df[self.df['POAM ID'].str.match(trivy_pattern, na=False)]
+    
+    def get_trivy_poam_entries(self, limit: Optional[int] = None) -> list[PoamEntry]:
+        """
+        Get Trivy POAMs as PoamEntry objects.
+        
+        Args:
+            limit: Optional number of entries to return
+            
+        Returns:
+            List of PoamEntry objects
+        """
+        df = self.get_trivy_poams()
+        if limit:
+            df = df.head(limit)
+        
+        return [PoamEntry.from_dict(row) for _, row in df.iterrows()]
+    
+    def preview_trivy_poams(self, limit: int = 5) -> str:
+        """
+        Get a YAML preview of the first N Trivy POAMs.
+        
+        Args:
+            limit: Number of POAMs to preview (default 5)
+            
+        Returns:
+            YAML formatted string of the POAMs
+        """
+        entries = self.get_trivy_poam_entries(limit)
+        
+        # Convert to dict format expected in output
+        preview_data = []
+        for entry in entries:
+            # Convert datetime objects to strings
+            entry_dict = {}
+            for field, value in entry.__dict__.items():
+                if isinstance(value, datetime):
+                    value = value.strftime('%Y-%m-%d')
+                # Convert snake_case back to Title Case for keys
+                key = ' '.join(word.capitalize() for word in field.split('_'))
+                entry_dict[key] = value
+            preview_data.append(entry_dict)
+        
+        # Convert to YAML with proper formatting
+        return yaml.dump(preview_data, sort_keys=False, allow_unicode=True) 

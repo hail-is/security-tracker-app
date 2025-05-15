@@ -15,6 +15,7 @@ A Streamlit-based application for tracking and managing security findings from w
 - Interactive data visualization
 - Export capabilities for active and resolved findings
 - Modern, responsive UI inspired by hail.is
+- Command line tools for automation and data management
 
 ## Installation
 
@@ -40,7 +41,43 @@ source venv/bin/activate  # On Windows: venv\Scripts\activate
 pip install -r requirements.txt
 ```
 
-## Usage
+## Command Line Tools
+
+The application includes command line tools for automation and data management. These tools are available through the `cli.py` script in the `cli` directory.
+
+### Authentication
+
+The tools that interact with Google services use Application Default Credentials (ADC). To set up authentication:
+
+1. Using gcloud (recommended for development):
+```bash
+gcloud auth application-default login
+```
+
+2. Or using a service account (recommended for production):
+```bash
+export GOOGLE_APPLICATION_CREDENTIALS="/path/to/service-account-key.json"
+```
+
+### Available Commands
+
+1. Download Google Sheets:
+```bash
+# Using a Google Sheets URL
+./cli/cli.py download-gsheet "https://docs.google.com/spreadsheets/d/YOUR_SHEET_ID"
+
+# Or using just the file ID
+./cli/cli.py download-gsheet "YOUR_SHEET_ID"
+```
+
+The downloaded files will be saved to the `working` directory in the project root.
+
+To see all available commands and their options:
+```bash
+./cli/cli.py --help
+```
+
+## Web Application Usage
 
 1. Start the Streamlit application (make sure you're in the repository root directory):
 ```bash
