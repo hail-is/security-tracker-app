@@ -145,13 +145,23 @@ class PoamFile:
         if "Open POA&M Items" not in self.workbook.sheet_names:
             raise ValueError('Excel file must contain "Open POA&M Items" sheet')
         
-        # Load the data with headers in row 5 (0-based index is 4)
+        # Load the open POAMs data with headers in row 5 (0-based index is 4)
         self.df = pd.read_excel(
             self.workbook,
             sheet_name="Open POA&M Items",
             header=4,  # 0-based index for row 5
             engine='openpyxl'
         )
+        
+        # Load closed POAMs if available
+        self.closed_df = None
+        if "Closed POA&M Items" in self.workbook.sheet_names:
+            self.closed_df = pd.read_excel(
+                self.workbook,
+                sheet_name="Closed POA&M Items",
+                header=4,  # 0-based index for row 5
+                engine='openpyxl'
+            )
     
     def get_trivy_poams(self) -> pd.DataFrame:
         """
@@ -166,7 +176,23 @@ class PoamFile:
         # Filter for POAM IDs matching the Trivy pattern
         return self.df[self.df['POAM ID'].str.match(trivy_pattern, na=False)]
     
-    def get_trivy_poam_entries(self, limit: Optional[int] = None) -> list[PoamEntry]:
+    def get_closed_trivy_poams(self) -> pd.DataFrame:
+        """
+        Filter and return closed Trivy POAMs.
+        
+        Returns:
+            DataFrame containing only closed Trivy POAMs, or empty DataFrame if no closed POAMs exist
+        """
+        if self.closed_df is None:
+            return pd.DataFrame()
+            
+        # Pattern matches YYYY-TRIVYXXXX where XXXX is 4 or more digits
+        trivy_pattern = r'^\d{4}-TRIVY\d{4,}$'
+        
+        # Filter for POAM IDs matching the Trivy pattern
+        return self.closed_df[self.closed_df['POAM ID'].str.match(trivy_pattern, na=False)]
+    
+    def get_trivy_poam_entries(self, limit: Optional[int] = None) -> tuple[list[PoamEntry], list[PoamEntry]]:
         """
         Get Trivy POAMs as PoamEntry objects.
         
@@ -174,13 +200,21 @@ class PoamFile:
             limit: Optional number of entries to return
             
         Returns:
-            List of PoamEntry objects
+            Tuple of (open_poams, closed_poams) where each is a list of PoamEntry objects
         """
-        df = self.get_trivy_poams()
+        # Get open POAMs
+        open_df = self.get_trivy_poams()
         if limit:
-            df = df.head(limit)
+            open_df = open_df.head(limit)
+        open_poams = [PoamEntry.from_dict(row) for _, row in open_df.iterrows()]
         
-        return [PoamEntry.from_dict(row) for _, row in df.iterrows()]
+        # Get closed POAMs
+        closed_df = self.get_closed_trivy_poams()
+        if limit:
+            closed_df = closed_df.head(limit)
+        closed_poams = [PoamEntry.from_dict(row) for _, row in closed_df.iterrows()]
+        
+        return open_poams, closed_poams
     
     def preview_trivy_poams(self, limit: int = 5) -> str:
         """
@@ -192,11 +226,11 @@ class PoamFile:
         Returns:
             YAML formatted string of the POAMs
         """
-        entries = self.get_trivy_poam_entries(limit)
+        open_entries, closed_entries = self.get_trivy_poam_entries(limit)
         
         # Convert to dict format expected in output
         preview_data = []
-        for entry in entries:
+        for entry in open_entries:
             # Convert datetime objects to strings
             entry_dict = {}
             for field, value in entry.__dict__.items():

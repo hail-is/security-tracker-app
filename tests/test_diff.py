@@ -176,25 +176,39 @@ def test_compare_findings_to_poams():
     """Test the full comparison logic."""
     # Create test findings
     findings = [
-        create_test_finding("TRIVY-001", "SQL Injection; CVE-2023-1234", "app-1"),
-        create_test_finding("TRIVY-002", "XSS; CVE-2023-5678", "app-2"),
-        create_test_finding("TRIVY-003", "CSRF; CVE-2023-9012", "app-3")
+        create_test_finding("TRIVY-001", "SQL Injection; CVE-2023-1234", "app-1"),  # Should match open POAM
+        create_test_finding("TRIVY-002", "XSS; CVE-2023-5678", "app-2"),           # Should be new (no match)
+        create_test_finding("TRIVY-003", "CSRF; CVE-2023-9012", "app-3"),          # Should match open POAM
+        create_test_finding("TRIVY-004", "RCE; CVE-2023-4567", "app-4"),           # Should match closed POAM
     ]
     
-    # Create test POAMs
-    poams = [
-        create_test_poam("POAM-001", "SQL Injection; CVE-2023-1234", "app-1, app-4"),
-        create_test_poam("POAM-002", "XSS; CVE-2023-5678", "app-5"),
-        create_test_poam("POAM-003", "Buffer Overflow; CVE-2023-3456", "app-1"),
-        create_test_poam("POAM-004", "CSRF; CVE-2023-9012", "app-1, app-2, app-3"),
+    # Create test open POAMs
+    open_poams = [
+        create_test_poam("POAM-001", "SQL Injection; CVE-2023-1234", "app-1, app-4"),  # Should match TRIVY-001
+        create_test_poam("POAM-002", "XSS; CVE-2023-5678", "app-5"),                   # Should be closed (no match)
+        create_test_poam("POAM-003", "Buffer Overflow; CVE-2023-3456", "app-1"),       # Should be closed (no match)
+        create_test_poam("POAM-004", "CSRF; CVE-2023-9012", "app-1, app-2, app-3"),   # Should match TRIVY-003
     ]
     
-    diff = compare_findings_to_poams(findings, poams)
+    # Create test closed POAMs
+    closed_poams = [
+        create_test_poam("POAM-005", "RCE; CVE-2023-4567", "app-4"),  # Should match TRIVY-004 (reopened)
+        create_test_poam("POAM-006", "XSS; CVE-2023-8901", "app-6"),  # Should stay closed (no match)
+    ]
     
-    # Verify the results
+    # Compare findings to POAMs
+    diff = compare_findings_to_poams(findings, open_poams, closed_poams)
+    
+    # Verify new findings
     assert {f.finding_id for f in diff.new_findings} == {"TRIVY-002"}
     
+    # Verify existing matches
     assert {match.poam.poam_id for match in diff.existing_matches} == {"POAM-001", "POAM-004"}
     assert {match.finding.finding_id for match in diff.existing_matches} == {"TRIVY-001", "TRIVY-003"}
     
+    # Verify reopened findings
+    assert {match.poam.poam_id for match in diff.reopened_findings} == {"POAM-005"}
+    assert {match.finding.finding_id for match in diff.reopened_findings} == {"TRIVY-004"}
+    
+    # Verify closed POAMs
     assert {poam.poam_id for poam in diff.closed_poams} == {"POAM-002", "POAM-003"}

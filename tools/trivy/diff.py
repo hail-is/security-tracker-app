@@ -20,6 +20,7 @@ class TrivyAlertsDiff:
     new_findings: List[Finding]  # Findings without corresponding POAMs
     existing_matches: List[FindingPoamMatch]  # Findings matched to existing POAMs
     closed_poams: List[PoamEntry]  # POAMs without corresponding findings
+    reopened_findings: List[FindingPoamMatch]  # Findings that match previously closed POAMs
 
     def print_summary(self, max_preview: int = 10) -> None:
         """Print a human-readable summary of the diff."""
@@ -39,6 +40,16 @@ class TrivyAlertsDiff:
             print(f"Preview of matches: {', '.join(matches)}")
             if len(self.existing_matches) > max_preview:
                 print(f"... and {len(self.existing_matches) - max_preview} more")
+
+        # Print reopened findings
+        print("\n=== Reopened Findings ===")
+        print(f"Count: {len(self.reopened_findings)}")
+        if self.reopened_findings:
+            matches = [f"{match.finding.finding_id} -> {match.poam.poam_id}" 
+                      for match in self.reopened_findings[:max_preview]]
+            print(f"Preview of matches: {', '.join(matches)}")
+            if len(self.reopened_findings) > max_preview:
+                print(f"... and {len(self.reopened_findings) - max_preview} more")
 
         # Print closed POAMs
         print("\n=== Closed POAMs ===")
@@ -97,43 +108,54 @@ def compare_findings_to_trivy_poams(findings: List[Finding], poam_file: Path) ->
         poam_file: Path to Excel file containing Trivy POAMs
         
     Returns:
-        TrivyAlertsDiff containing new, existing, and closed findings
+        TrivyAlertsDiff containing new, existing, closed, and reopened findings
     """
     # Load Trivy POAMs
-    poam_entries = PoamFile(poam_file).get_trivy_poam_entries()
-    return compare_findings_to_poams(findings, poam_entries)
+    poam_file_handler = PoamFile(poam_file)
+    open_poams, closed_poams = poam_file_handler.get_trivy_poam_entries()
+    return compare_findings_to_poams(findings, open_poams, closed_poams)
 
 
-def compare_findings_to_poams(findings: List[Finding], poam_entries: List[PoamEntry]) -> TrivyAlertsDiff:
+def compare_findings_to_poams(findings: List[Finding], 
+                            open_poams: List[PoamEntry], 
+                            closed_poams: List[PoamEntry]) -> TrivyAlertsDiff:
     """
     Compare a list of findings against existing POAMs.
     
     Args:
         findings: List of current findings from Trivy
-        poam_file: Path to Excel file containing existing POAMs
+        open_poams: List of open POAMs
+        closed_poams: List of closed POAMs
         
     Returns:
-        TrivyAlertsDiff containing new, existing, and closed findings
+        TrivyAlertsDiff containing new, existing, closed, and reopened findings
     """
     # Track which POAMs are matched
     matched_poams = set()
     new_findings = []
     existing_matches = []
+    reopened_findings = []
     
-    # Find matches for each finding
+    # First check for matches against open POAMs
     for finding in findings:
-        match = _find_matching_poam(finding, poam_entries)
+        match = _find_matching_poam(finding, open_poams)
         if match:
             existing_matches.append(match)
             matched_poams.add(match.poam)
         else:
-            new_findings.append(finding)
+            # If no match in open POAMs, check closed POAMs
+            closed_match = _find_matching_poam(finding, closed_poams)
+            if closed_match:
+                reopened_findings.append(closed_match)
+            else:
+                new_findings.append(finding)
     
     # Find closed POAMs (those without matches)
-    closed_poams = [poam for poam in poam_entries if poam not in matched_poams]
+    closed_poams = [poam for poam in open_poams if poam not in matched_poams]
     
     return TrivyAlertsDiff(
         new_findings=new_findings,
         existing_matches=existing_matches,
-        closed_poams=closed_poams
+        closed_poams=closed_poams,
+        reopened_findings=reopened_findings
     ) 
