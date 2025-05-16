@@ -17,13 +17,24 @@ from tools.trivy.alerts import convert_alerts_to_poam
 from tools.trivy.importer import import_alerts_from_csv
 from tools.trivy.diff import compare_findings_to_trivy_poams
 from tools.trivy.diff_apply import apply_diff_from_files
+from tools.findings import import_alerts_from_csv
 
 @click.group()
 def cli():
-    """Security findings management CLI."""
+    """Security tools CLI."""
     pass
 
-@cli.command()
+@cli.group()
+def poams():
+    """Commands for working with POAMs."""
+    pass
+
+@cli.group()
+def trivy():
+    """Commands for working with Trivy."""
+    pass
+
+@poams.command('preview-trivy')
 @click.argument('file_path', type=click.Path(exists=True))
 @click.option('--limit', '-n', default=5, help='Number of POAMs to preview')
 def preview_trivy(file_path, limit):
@@ -40,7 +51,7 @@ def preview_trivy(file_path, limit):
         click.echo(f"Error: {str(e)}", err=True)
         sys.exit(1)
 
-@cli.command()
+@trivy.command('download-alerts')
 def download_alerts():
     """Download Trivy alerts from GitHub code scanning API.
     
@@ -60,7 +71,7 @@ def download_alerts():
         click.echo(f"Error: {str(e)}", err=True)
         sys.exit(1)
 
-@cli.command()
+@trivy.command('convert-alerts')
 @click.argument('alerts_file', type=click.Path(exists=True))
 def convert_alerts(alerts_file):
     """Convert GitHub Trivy alerts JSON to POAM CSV format.
@@ -78,64 +89,7 @@ def convert_alerts(alerts_file):
         click.echo(f"Error: {str(e)}", err=True)
         sys.exit(1)
 
-@cli.command()
-@click.argument('csv_file', type=click.Path(exists=True, path_type=Path))
-def import_alerts(csv_file: Path):
-    """
-    Import Trivy alerts from a CSV file and display the first entry in YAML format.
-    
-    CSV_FILE: Path to the CSV file containing Trivy alerts
-    """
-    try:
-        findings = import_alerts_from_csv(csv_file)
-        if not findings:
-            click.echo("No findings found in CSV file", err=True)
-            sys.exit(1)
-            
-        # Get the first finding and convert to dict for YAML output
-        first_finding = findings[0]
-        finding_dict = {
-            'finding_id': first_finding.finding_id,
-            'controls': first_finding.controls,
-            'weakness_name': first_finding.weakness_name,
-            'weakness_description': first_finding.weakness_description,
-            'weakness_detector_source': first_finding.weakness_detector_source,
-            'weakness_source_identifier': first_finding.weakness_source_identifier,
-            'asset_identifier': first_finding.asset_identifier,
-            'point_of_contact': first_finding.point_of_contact,
-            'resources_required': first_finding.resources_required,
-            'overall_remediation_plan': first_finding.overall_remediation_plan,
-            'original_detection_date': first_finding.original_detection_date.strftime("%Y-%m-%d"),
-            'scheduled_completion_date': first_finding.scheduled_completion_date.strftime("%Y-%m-%d"),
-            'planned_milestones': first_finding.planned_milestones,
-            'milestone_changes': first_finding.milestone_changes,
-            'status_date': first_finding.status_date.strftime("%Y-%m-%d"),
-            'vendor_dependency': first_finding.vendor_dependency,
-            'last_vendor_check_in_date': first_finding.last_vendor_check_in_date.strftime("%Y-%m-%d") if first_finding.last_vendor_check_in_date else None,
-            'vendor_dependent_product_name': first_finding.vendor_dependent_product_name,
-            'original_risk_rating': first_finding.original_risk_rating,
-            'adjusted_risk_rating': first_finding.adjusted_risk_rating,
-            'risk_adjustment': first_finding.risk_adjustment,
-            'false_positive': first_finding.false_positive,
-            'operational_requirement': first_finding.operational_requirement,
-            'deviation_rationale': first_finding.deviation_rationale,
-            'supporting_documents': first_finding.supporting_documents,
-            'comments': first_finding.comments,
-            'auto_approve': first_finding.auto_approve,
-            'binding_operational_directive_22_01_tracking': first_finding.binding_operational_directive_22_01_tracking,
-            'binding_operational_directive_22_01_due_date': first_finding.binding_operational_directive_22_01_due_date.strftime("%Y-%m-%d") if first_finding.binding_operational_directive_22_01_due_date else None,
-            'cve': first_finding.cve,
-            'service_name': first_finding.service_name
-        }
-        
-        # Output as YAML
-        click.echo(yaml.dump(finding_dict, sort_keys=False))
-        
-    except Exception as e:
-        click.echo(f"Error importing alerts: {str(e)}", err=True)
-        sys.exit(1)
-
-@cli.command()
+@trivy.command('alerts-diff')
 @click.argument('poam_file', type=click.Path(exists=True, path_type=Path))
 @click.argument('alerts_csv', type=click.Path(exists=True, path_type=Path))
 def alerts_diff(poam_file: Path, alerts_csv: Path):
@@ -173,7 +127,7 @@ def alerts_diff(poam_file: Path, alerts_csv: Path):
         click.echo(f"Error comparing alerts: {str(e)}", err=True)
         sys.exit(1)
 
-@cli.command()
+@poams.command('apply-diff')
 @click.argument('poam_file', type=click.Path(exists=True, path_type=Path))
 @click.argument('diff_file', type=click.Path(exists=True, path_type=Path))
 def apply_diff(poam_file: Path, diff_file: Path) -> None:
@@ -192,7 +146,6 @@ def apply_diff(poam_file: Path, diff_file: Path) -> None:
         click.echo(f"Successfully applied diff changes to {poam_file}")
     except Exception as e:
         click.echo(f"Error applying diff: {str(e)}", err=True)
-        raise e
         sys.exit(1)
 
 if __name__ == '__main__':

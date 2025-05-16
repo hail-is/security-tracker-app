@@ -56,99 +56,60 @@ The test suite includes:
 
 ## Commands
 
-### Download Alerts
+The CLI is organized into command groups for better organization and usability.
 
-Download Trivy alerts from GitHub's code scanning API:
+### POAM Commands
 
-```bash
-./cli.py download-alerts
-```
-
-This command:
-- Downloads Trivy alerts from GitHub's code scanning API
-- Saves them as a JSON file in the working directory
-- Requires either:
-  1. GitHub CLI (`gh`) installed and authenticated via `gh auth login`
-  2. GitHub token provided via `GITHUB_TOKEN` environment variable
-
-### Convert Alerts
-
-Convert downloaded GitHub Trivy alerts from JSON to CSV format:
+Commands for working with POAMs are grouped under the `poams` command:
 
 ```bash
-./cli.py convert-alerts <alerts_file>
+# Preview POAMs from an Excel file
+./cli.py poams preview-trivy <file_path> [--limit <n>]
+
+# Apply diff changes to a POAM Excel file
+./cli.py poams apply-diff <poam_file> <diff_file>
 ```
 
-This command:
-- Takes a JSON file containing GitHub code scanning alerts
-- Converts the alerts to a CSV format suitable for findings tracking
-- Saves the output as a CSV file in the working directory
+### Trivy Commands
 
-### Import and View Alerts
-
-Import alerts from CSV and display the first entry in YAML format:
+Commands for working with Trivy alerts are grouped under the `trivy` command:
 
 ```bash
-./cli.py import-alerts <csv_file>
+# Download Trivy alerts from GitHub's code scanning API
+./cli.py trivy download-alerts
+
+# Convert downloaded GitHub Trivy alerts from JSON to CSV format
+./cli.py trivy convert-alerts <alerts_file>
+
+# Compare current Trivy alerts against existing POAMs
+./cli.py trivy alerts-diff <poam_file> <alerts_csv>
 ```
 
-This command:
-- Reads a CSV file containing Trivy alerts
-- Converts each row into a Finding object
-- Displays the first finding in YAML format for review
-
-### Compare Alerts with POAMs
-
-Compare current Trivy alerts against existing POAMs:
-
-```bash
-./cli.py alerts-diff <poam_file> <alerts_csv>
-```
-
-This command:
-- Reads existing POAMs from an Excel file
-- Compares them against current findings from a CSV file
-- Shows:
-  - New findings that need POAMs created
-  - Existing findings that already have POAMs (with confidence scores)
-  - Closed POAMs that no longer have corresponding findings
-- Matching is done based on:
-  - Weakness name similarity
-  - Asset identifier matching
-
-### Preview Trivy POAMs
-
-Preview POAMs from an Excel file:
-
-```bash
-./cli.py preview-trivy <file_path> [--limit <n>]
-```
-
-This command:
-- Reads POAMs from an Excel file
-- Displays a preview of the first n entries (default: 5)
-- Requires an Excel file with an "Open POA&M Items" sheet and headers in row 5
+Each command includes error handling and will provide helpful error messages if something goes wrong.
 
 ## Example Workflow
 
 1. Download alerts from GitHub:
    ```bash
-   ./cli.py download-alerts
+   ./cli.py trivy download-alerts
    ```
 
 2. Convert the downloaded JSON to CSV:
    ```bash
-   ./cli.py convert-alerts alerts_20240513.json
+   ./cli.py trivy convert-alerts alerts_20240513.json
    ```
 
 3. Compare new alerts against existing POAMs:
    ```bash
-   ./cli.py alerts-diff existing_poams.xlsx working/trivy_alerts_20240513_180947.csv
+   ./cli.py trivy alerts-diff existing_poams.xlsx working/trivy_alerts_20240513_180947.csv
    ```
 
-4. Import and verify specific alerts:
+4. Preview POAMs in an Excel file:
    ```bash
-   ./cli.py import-alerts working/trivy_alerts_20240513_180947.csv
+   ./cli.py poams preview-trivy existing_poams.xlsx
    ```
 
-Each command includes error handling and will provide helpful error messages if something goes wrong. 
+5. Apply diff changes to update POAMs:
+   ```bash
+   ./cli.py poams apply-diff existing_poams.xlsx alerts_20240513.diff.json
+   ``` 

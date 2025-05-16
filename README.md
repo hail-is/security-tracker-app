@@ -45,6 +45,42 @@ pip install -r requirements.txt
 
 The application includes command line tools for automation and data management. These tools are available through the `cli.py` script in the `cli` directory.
 
+### Command Groups
+
+The CLI is organized into the following command groups:
+
+1. `poams` - Commands for working with POAMs:
+   ```bash
+   # Preview Trivy POAMs from an Excel file
+   ./cli/cli.py poams preview-trivy <file_path> [--limit <n>]
+   
+   # Apply diff changes to a POAM Excel file
+   ./cli/cli.py poams apply-diff <poam_file> <diff_file>
+   ```
+
+2. `trivy` - Commands for working with Trivy:
+   ```bash
+   # Download Trivy alerts from GitHub code scanning API
+   ./cli/cli.py trivy download-alerts
+   
+   # Convert GitHub Trivy alerts JSON to POAM CSV format
+   ./cli/cli.py trivy convert-alerts <alerts_file>
+   
+   # Compare Trivy alerts against existing POAMs
+   ./cli/cli.py trivy alerts-diff <poam_file> <alerts_csv>
+   ```
+
+To see all available commands and their options:
+```bash
+./cli/cli.py --help
+```
+
+For help on a specific command group:
+```bash
+./cli/cli.py poams --help
+./cli/cli.py trivy --help
+```
+
 ### Authentication
 
 The tools that interact with Google services use Application Default Credentials (ADC). To set up authentication:
@@ -71,11 +107,6 @@ export GOOGLE_APPLICATION_CREDENTIALS="/path/to/service-account-key.json"
 ```
 
 The downloaded files will be saved to the `working` directory in the project root.
-
-To see all available commands and their options:
-```bash
-./cli/cli.py --help
-```
 
 ## Web Application Usage
 
