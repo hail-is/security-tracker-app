@@ -16,6 +16,7 @@ from tools.github import download_trivy_alerts
 from tools.trivy.alerts import convert_alerts_to_poam
 from tools.trivy.importer import import_alerts_from_csv
 from tools.trivy.diff import compare_findings_to_trivy_poams
+from tools.trivy.diff_apply import apply_diff_from_files
 
 @click.group()
 def cli():
@@ -170,6 +171,28 @@ def alerts_diff(poam_file: Path, alerts_csv: Path):
         
     except Exception as e:
         click.echo(f"Error comparing alerts: {str(e)}", err=True)
+        sys.exit(1)
+
+@cli.command()
+@click.argument('poam_file', type=click.Path(exists=True, path_type=Path))
+@click.argument('diff_file', type=click.Path(exists=True, path_type=Path))
+def apply_diff(poam_file: Path, diff_file: Path) -> None:
+    """Apply diff changes to a POAM Excel file.
+    
+    POAM_FILE: Excel file containing POAMs
+    DIFF_FILE: JSON file containing diff changes
+    
+    This command will:
+    - Add new POAMs to the Open POA&M Items sheet
+    - Move reopened POAMs from Closed to Open sheet
+    - Move closed POAMs from Open to Closed sheet
+    """
+    try:
+        apply_diff_from_files(poam_file, diff_file)
+        click.echo(f"Successfully applied diff changes to {poam_file}")
+    except Exception as e:
+        click.echo(f"Error applying diff: {str(e)}", err=True)
+        raise e
         sys.exit(1)
 
 if __name__ == '__main__':
