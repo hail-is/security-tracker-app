@@ -17,7 +17,7 @@ from tools.trivy.alerts import convert_alerts_to_poam
 from tools.trivy.importer import import_alerts_from_csv
 from tools.trivy.diff import compare_findings_to_trivy_poams
 from tools.trivy.diff_apply import apply_diff_from_files
-from tools.findings import import_alerts_from_csv
+from tools.zap import convert_alerts_to_findings
 
 @click.group()
 def cli():
@@ -32,6 +32,11 @@ def poams():
 @cli.group()
 def trivy():
     """Commands for working with Trivy."""
+    pass
+
+@cli.group()
+def zap():
+    """Commands for working with ZAP scan reports."""
     pass
 
 @poams.command('preview-trivy')
@@ -146,6 +151,32 @@ def apply_diff(poam_file: Path, diff_file: Path) -> None:
         click.echo(f"Successfully applied diff changes to {poam_file}")
     except Exception as e:
         click.echo(f"Error applying diff: {str(e)}", err=True)
+        sys.exit(1)
+
+@zap.command('alerts-to-findings')
+@click.argument('xml_file', type=click.Path(exists=True))
+def alerts_to_findings(xml_file):
+    """Convert ZAP XML alerts to findings JSON format.
+    
+    XML_FILE should be a ZAP XML report file.
+    The findings will be saved as a JSON file and the first finding will be displayed.
+    """
+    try:
+        # Convert alerts to findings
+        output_file = convert_alerts_to_findings(xml_file)
+        
+        # Load and display first finding
+        with open(output_file) as f:
+            findings = json.load(f)
+            if findings:
+                click.echo("\nFirst finding from the report:")
+                click.echo(json.dumps(findings[0], indent=2))
+                click.echo(f"\nTotal findings: {len(findings)}")
+                click.echo(f"All findings saved to: {output_file}")
+            else:
+                click.echo("No findings found in the report.")
+    except Exception as e:
+        click.echo(f"Error converting alerts: {str(e)}", err=True)
         sys.exit(1)
 
 if __name__ == '__main__':
