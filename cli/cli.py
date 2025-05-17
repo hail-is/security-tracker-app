@@ -7,10 +7,12 @@ import os
 from pathlib import Path
 import yaml
 from datetime import datetime
+from typing import Optional
 
 # Add the project root to the Python path
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
+from tools.findings import Finding
 from tools.poam import PoamFile
 from tools.github import download_trivy_alerts
 from tools.trivy.alerts import convert_alerts_to_poam
@@ -18,6 +20,7 @@ from tools.trivy.importer import import_alerts_from_csv
 from tools.trivy.diff import compare_findings_to_trivy_poams
 from tools.trivy.diff_apply import apply_diff_from_files
 from tools.zap import convert_alerts_to_findings
+from tools.zap.diff import compare_findings_to_zap_poams
 
 @click.group()
 def cli():
@@ -177,6 +180,37 @@ def alerts_to_findings(xml_file):
                 click.echo("No findings found in the report.")
     except Exception as e:
         click.echo(f"Error converting alerts: {str(e)}", err=True)
+        sys.exit(1)
+
+@zap.command('alerts-diff')
+@click.argument('findings_file', type=click.Path(exists=True))
+@click.argument('poam_file', type=click.Path(exists=True))
+@click.option('--json-output', type=click.Path(), help='Path to save JSON output')
+def alerts_diff(findings_file: str, poam_file: str, json_output: Optional[str]) -> None:
+    """Compare ZAP findings against existing POAMs."""
+    try:
+        # Load findings from JSON file
+        with open(findings_file) as f:
+            findings_data = json.load(f)
+            findings = [Finding.from_dict(f) for f in findings_data]
+        
+        # Compare findings to POAMs
+        diff = compare_findings_to_zap_poams(findings, poam_file)
+        
+        # Print human readable summary
+        diff.print_summary()
+        
+        # Save JSON output if requested
+        if not json_output:
+            # Finding file as a path:
+            findings_path = Path(findings_file)
+            json_output = findings_path.with_suffix('.diff.json')
+        json_data = diff.to_json()
+        with open(json_output, 'w') as f:
+            json.dump(json_data, f, indent=2)
+            click.echo(f"JSON output saved to: {json_output}")
+    except Exception as e:
+        click.echo(f"Error comparing findings: {str(e)}", err=True)
         sys.exit(1)
 
 if __name__ == '__main__':
