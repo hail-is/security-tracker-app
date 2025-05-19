@@ -21,6 +21,8 @@ from tools.trivy.diff import compare_findings_to_trivy_poams
 from tools.trivy.diff_apply import apply_diff_from_files
 from tools.zap import convert_alerts_to_findings
 from tools.zap.diff import compare_findings_to_zap_poams
+from tools.cis.splitter import split_connected_sheet
+from tools.cis.converter import convert_to_findings_file
 
 @click.group()
 def cli():
@@ -40,6 +42,11 @@ def trivy():
 @cli.group()
 def zap():
     """Commands for working with ZAP scan reports."""
+    pass
+
+@cli.group()
+def cis():
+    """Commands for working with CIS scan reports."""
     pass
 
 @poams.command('preview-trivy')
@@ -211,6 +218,61 @@ def alerts_diff(findings_file: str, poam_file: str, json_output: Optional[str]) 
             click.echo(f"JSON output saved to: {json_output}")
     except Exception as e:
         click.echo(f"Error comparing findings: {str(e)}", err=True)
+        sys.exit(1)
+
+@cis.command('split-connected-sheet')
+@click.argument('xlsx_file', type=click.Path(exists=True, path_type=Path))
+def split_connected_sheet_cmd(xlsx_file: Path) -> None:
+    """Split a CIS connected sheet into separate CSV files by date.
+    
+    XLSX_FILE should be a CIS connected sheet Excel file.
+    
+    The command will:
+    - Create a "Divided CIS Scans" directory if it doesn't exist
+    - Split the file into multiple CSVs based on the Date field
+    - Name each file as "<original_name> - YYYY-MM-DD.csv"
+    - Skip writing if a file for a particular date already exists
+    """
+    try:
+        output_files = split_connected_sheet(xlsx_file)
+        if output_files:
+            click.echo(f"Successfully split {xlsx_file.name} into {len(output_files)} files:")
+            for f in output_files:
+                click.echo(f"  - {f.name}")
+        else:
+            click.echo("No new files created (all dates already exist)")
+    except Exception as e:
+        click.echo(f"Error splitting connected sheet: {str(e)}", err=True)
+        sys.exit(1)
+
+@cis.command('csv-to-findings')
+@click.argument('csv_file', type=click.Path(exists=True, path_type=Path))
+def csv_to_findings_cmd(csv_file: Path) -> None:
+    """Convert a CIS CSV file to findings JSON format.
+    
+    CSV_FILE should be a CIS CSV file (typically from split-connected-sheet).
+    
+    The command will:
+    - Convert each row into one or more findings based on the Failures field
+    - Generate finding IDs in the format CIS-<CIS_ID>-XXXX
+    - Save the findings as <input_file>.findings.json
+    """
+    try:
+        output_file = convert_to_findings_file(csv_file)
+        
+        # Load and display summary
+        with open(output_file) as f:
+            findings = json.load(f)
+            click.echo(f"\nSuccessfully converted {csv_file.name} to findings:")
+            click.echo(f"- Total findings: {len(findings)}")
+            if findings:
+                unique_rules = len({f['weakness_name'] for f in findings})
+                click.echo(f"- Unique CIS rules: {unique_rules}")
+                click.echo("\nSample finding:")
+                click.echo(json.dumps(findings[0], indent=2))
+            click.echo(f"\nOutput saved to: {output_file}")
+    except Exception as e:
+        click.echo(f"Error converting CSV to findings: {str(e)}", err=True)
         sys.exit(1)
 
 if __name__ == '__main__':
