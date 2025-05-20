@@ -95,7 +95,8 @@ def generate_poams_from_findings(findings: List[Finding], existing_poam_ids: Lis
     for (weakness_name, _), group in grouped_findings.items():
         # Unpack findings and their completion dates
         findings_list = [f for f, _ in group]
-        completion_date = group[0][1]  # Use the completion date from the first finding (they're all the same)
+        first_finding = findings_list[0]
+        completion_date = first_finding.scheduled_completion_date
         
         # Get earliest detection date from group
         detection_date = min(f.original_detection_date for f in findings_list)
@@ -114,36 +115,36 @@ def generate_poams_from_findings(findings: List[Finding], existing_poam_ids: Lis
         # Create POAM entry
         poam = PoamEntry(
             poam_id=poam_id,
-            controls="",  # CIS findings don't map to specific controls
-            weakness_name=weakness_name,
-            weakness_description=f"CIS configuration finding: {weakness_name}",
-            weakness_detector_source="CIS",
-            weakness_source_identifier="",  # No specific identifier for CIS findings
+            controls=first_finding.controls,
+            weakness_name=first_finding.weakness_name,
+            weakness_description=first_finding.weakness_description,
+            weakness_detector_source=first_finding.weakness_detector_source,
+            weakness_source_identifier=first_finding.weakness_source_identifier,
             asset_identifier=combined_asset_id,
-            point_of_contact="Security Team",
-            resources_required="Security Team time",
-            overall_remediation_plan=f"Remediate {weakness_name} configuration finding",
+            point_of_contact=first_finding.point_of_contact,
+            resources_required=first_finding.resources_required,
+            overall_remediation_plan=first_finding.overall_remediation_plan,
             original_detection_date=detection_date,
             scheduled_completion_date=completion_date,
-            planned_milestones="",
-            milestone_changes="",
+            planned_milestones=first_finding.planned_milestones,
+            milestone_changes=first_finding.milestone_changes,
             status_date=datetime.now(timezone.utc),
-            vendor_dependency="No",
-            last_vendor_check_in_date=None,
-            vendor_dependent_product_name="",
+            vendor_dependency=first_finding.vendor_dependency,
+            last_vendor_check_in_date=first_finding.last_vendor_check_in_date,
+            vendor_dependent_product_name=first_finding.vendor_dependent_product_name,
             original_risk_rating=risk_rating,
-            adjusted_risk_rating="",
-            risk_adjustment="",
-            false_positive="No",
-            operational_requirement="No",
-            deviation_rationale="",
-            supporting_documents="",
-            comments=", ".join(f.finding_id for f in findings_list),  # Store finding IDs in comments
-            auto_approve="No",
-            binding_operational_directive_22_01_tracking="No",
-            binding_operational_directive_22_01_due_date=None,
-            cve="",  # CIS findings don't have CVEs
-            service_name=""  # CIS findings don't have service names
+            adjusted_risk_rating=first_finding.adjusted_risk_rating,
+            risk_adjustment=first_finding.risk_adjustment,
+            false_positive=first_finding.false_positive,
+            operational_requirement=first_finding.operational_requirement,
+            deviation_rationale=first_finding.deviation_rationale,
+            supporting_documents=first_finding.supporting_documents,
+            comments="", # No finding IDs for CIS findings
+            auto_approve=first_finding.auto_approve,
+            binding_operational_directive_22_01_tracking=first_finding.binding_operational_directive_22_01_tracking,
+            binding_operational_directive_22_01_due_date=first_finding.binding_operational_directive_22_01_due_date,
+            cve=first_finding.cve,
+            service_name=first_finding.service_name  
         )
         
         result.append((findings_list, poam))
