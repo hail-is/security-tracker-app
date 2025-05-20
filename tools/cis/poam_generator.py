@@ -36,22 +36,6 @@ def _get_next_poam_id(existing_poam_ids: List[str], current_year: int = None) ->
     # Return next number
     return f"{year_prefix}{highest + 1:04d}"
 
-def _group_findings_by_weakness(findings: List[Finding]) -> Dict[str, List[Finding]]:
-    """
-    Group findings by weakness name and asset identifier.
-    
-    Args:
-        findings: List of findings to group
-        
-    Returns:
-        Dictionary mapping (weakness_name, asset_identifier) to list of findings
-    """
-    groups = defaultdict(list)
-    for finding in findings:
-        key = (finding.weakness_name, finding.asset_identifier)
-        groups[key].append(finding)
-    return dict(groups)
-
 def _get_completion_date(risk_rating: str) -> datetime:
     """
     Calculate completion date based on risk rating.
@@ -73,6 +57,23 @@ def _get_completion_date(risk_rating: str) -> datetime:
     else:  # Low
         return today + timedelta(days=180)
 
+def _group_findings_by_weakness_and_date(findings: List[Finding]) -> Dict[tuple, List[Finding]]:
+    """
+    Group findings by weakness name and completion date.
+    
+    Args:
+        findings: List of findings to group
+        
+    Returns:
+        Dictionary mapping (weakness_name, completion_date) to list of findings
+    """
+    groups = defaultdict(list)
+    for finding in findings:
+        completion_date = _get_completion_date(finding.original_risk_rating)
+        key = (finding.weakness_name, completion_date)
+        groups[key].append(finding)
+    return dict(groups)
+
 def generate_poams_from_findings(findings: List[Finding], existing_poam_ids: List[str], current_year: int = None) -> List[Tuple[List[Finding], PoamEntry]]:
     """
     Generate POAMs from CIS findings.
@@ -87,22 +88,23 @@ def generate_poams_from_findings(findings: List[Finding], existing_poam_ids: Lis
     """
     result = []
     
-    # Group findings by weakness name and asset
-    grouped_findings = _group_findings_by_weakness(findings)
+    # Group findings by weakness name and completion date
+    grouped_findings = _group_findings_by_weakness_and_date(findings)
     
-    for (weakness_name, asset_id), group in grouped_findings.items():
+    for (weakness_name, completion_date), group in grouped_findings.items():
         # Get earliest detection date from group
         detection_date = min(f.original_detection_date for f in group)
         
         # Get highest risk rating from group
         risk_rating = max(f.original_risk_rating for f in group)
         
+        # Combine asset identifiers
+        asset_ids = sorted(set(f.asset_identifier for f in group))
+        combined_asset_id = ", ".join(asset_ids)
+        
         # Generate POAM ID
         poam_id = _get_next_poam_id(existing_poam_ids, current_year)
         existing_poam_ids.append(poam_id)  # Add to list so next ID will be different
-        
-        # Get completion date based on risk
-        completion_date = _get_completion_date(risk_rating)
         
         # Create POAM entry
         poam = PoamEntry(
@@ -112,7 +114,7 @@ def generate_poams_from_findings(findings: List[Finding], existing_poam_ids: Lis
             weakness_description=f"CIS configuration finding: {weakness_name}",
             weakness_detector_source="CIS",
             weakness_source_identifier="",  # No specific identifier for CIS findings
-            asset_identifier=asset_id,
+            asset_identifier=combined_asset_id,
             point_of_contact="Security Team",
             resources_required="Security Team time",
             overall_remediation_plan=f"Remediate {weakness_name} configuration finding",
