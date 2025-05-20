@@ -18,7 +18,7 @@ from tools.github import download_trivy_alerts
 from tools.trivy.alerts import convert_alerts_to_poam
 from tools.trivy.importer import import_alerts_from_csv
 from tools.trivy.diff import compare_findings_to_trivy_poams
-from tools.trivy.diff_apply import apply_diff_from_files
+from tools.diff_apply import apply_diff_from_files
 from tools.zap import convert_alerts_to_findings
 from tools.zap.diff import compare_findings_to_zap_poams
 from tools.cis.splitter import split_connected_sheet

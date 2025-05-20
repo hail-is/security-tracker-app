@@ -1,5 +1,5 @@
 """
-Module for applying Trivy diff changes to POAM Excel files.
+Module for applying diff changes to POAM Excel files.
 """
 from pathlib import Path
 import json
@@ -60,12 +60,12 @@ def apply_diff(poam_file: Path, diff_json: Dict[str, Any]) -> None:
         poam_file: Path to the POAM Excel file
         diff_json: Dictionary containing diff changes
     """
-    # Create backup copy
-    backup_file = create_updateable_copy(poam_file)
+    # Create editable copy
+    editable_copy = create_updateable_copy(poam_file)
     
     try:
-        # Load workbook from backup copy
-        wb = openpyxl.load_workbook(backup_file)
+        # Load workbook from editable copy
+        wb = openpyxl.load_workbook(editable_copy)
         
         # Get sheets
         if "Open POA&M Items" not in wb.sheetnames:
@@ -74,13 +74,19 @@ def apply_diff(poam_file: Path, diff_json: Dict[str, Any]) -> None:
         
         # Get or create closed sheet
         if "Closed POA&M Items" not in wb.sheetnames:
-            raise ValueError('Excel file must contain "Open POA&M Items" sheet')
-        else:
-            closed_sheet = wb["Closed POA&M Items"]
+            raise ValueError('Excel file must contain "Closed POA&M Items" sheet')
+        closed_sheet = wb["Closed POA&M Items"]
+
+        # Get or validate Configuration Findings sheet
+        if "Configuration Findings" not in wb.sheetnames:
+            raise ValueError('Excel file must contain "Configuration Findings" sheet')
+        config_sheet = wb["Configuration Findings"]
 
         # Get column indices from header row (row 5)
         header_row = 5
         open_headers = {cell.value: cell.column for cell in open_sheet[header_row]}
+        closed_headers = {cell.value: cell.column for cell in closed_sheet[header_row]}
+        config_headers = {cell.value: cell.column for cell in config_sheet[header_row]}
         
         # Handle new POAMs - add to open sheet
         if diff_json.get("new_poams"):
@@ -91,6 +97,16 @@ def apply_diff(poam_file: Path, diff_json: Dict[str, Any]) -> None:
                 for header, value in row_data.items():
                     if header in open_headers:
                         open_sheet.cell(row=next_row, column=open_headers[header], value=value)
+        
+        # Handle new configuration findings - add to Configuration Findings sheet
+        if diff_json.get("proposed_configuration_findings"):
+            for new_finding in diff_json["proposed_configuration_findings"]:
+                row_data = dict_to_row(new_finding["poam"])
+                # Add row at the top (after header)
+                config_sheet.insert_rows(header_row + 1)
+                for header, value in row_data.items():
+                    if header in config_headers:
+                        config_sheet.cell(row=header_row + 1, column=config_headers[header], value=value)
         
         # Handle reopened POAMs - move from closed to open
         if diff_json.get("reopen_poams"):
@@ -131,13 +147,33 @@ def apply_diff(poam_file: Path, diff_json: Dict[str, Any]) -> None:
             # Delete moved rows from open sheet (in reverse order to maintain indices)
             for row in sorted(rows_to_delete, reverse=True):
                 open_sheet.delete_rows(row)
+
+        # Handle closed configuration findings - move to Closed POA&M Items and delete from Configuration Findings
+        if diff_json.get("closed_configuration_findings"):
+            close_ids = set(diff_json["closed_configuration_findings"])
+            poam_id_col = next(col for header, col in config_headers.items() if header == "POAM ID")
+            
+            # Find and move rows
+            rows_to_delete = []
+            for row in range(header_row + 1, config_sheet.max_row + 1):
+                poam_id = config_sheet.cell(row=row, column=poam_id_col).value
+                if poam_id in close_ids:
+                    # Copy row to closed sheet
+                    next_row = closed_sheet.max_row + 1
+                    for col in range(1, config_sheet.max_column + 1):
+                        closed_sheet.cell(row=next_row, column=col, value=config_sheet.cell(row=row, column=col).value)
+                    rows_to_delete.append(row)
+            
+            # Delete moved rows from config sheet (in reverse order to maintain indices)
+            for row in sorted(rows_to_delete, reverse=True):
+                config_sheet.delete_rows(row)
         
-        # Save changes to the backup file
-        wb.save(backup_file)
+        # Save changes to the editable copy
+        wb.save(editable_copy)
         
     except Exception as e:
-        # If anything goes wrong, leave the backup file for inspection
-        raise type(e)(f"Error applying diff changes. Backup saved as {backup_file}. Error: {str(e)}") from e
+        # If anything goes wrong, leave the half-edited copy for inspection
+        raise type(e)(f"Error applying diff changes. Incomplete edit saved as {editable_copy}. Error: {str(e)}") from e
 
 def apply_diff_from_files(poam_file: Path, diff_file: Path) -> None:
     """
