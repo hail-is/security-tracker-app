@@ -1,8 +1,8 @@
 """
 Module for handling ZAP scan reports and converting alerts to findings.
 """
-import xml.etree.ElementTree as ET
-from datetime import datetime, timedelta
+import csv
+from datetime import datetime, timedelta, timezone
 from typing import List
 import json
 from pathlib import Path
@@ -20,106 +20,86 @@ def get_completion_date(severity: str, detection_date: datetime) -> datetime:
     days = days_map.get(severity, 180)  # Default to 180 days if unknown severity
     return detection_date + timedelta(days=days)
 
-def parse_zap_xml(xml_file: str) -> List[Finding]:
+def parse_zap_csv(csv_file: str) -> List[Finding]:
     """
-    Parse a ZAP XML report and extract alert findings.
+    Parse a ZAP CSV report and extract alert findings.
     
     Args:
-        xml_file: Path to the ZAP XML report file
+        csv_file: Path to the ZAP CSV report file
         
     Returns:
         List of Finding objects
     """
-    tree = ET.parse(xml_file)
-    root = tree.getroot()
-    
     findings = []
     
-    # Extract scan date from report
-    scan_date = datetime.strptime(root.get('generated'), '%a, %d %b %Y %H:%M:%S')
-    
-    # Process each alert
-    for site in root.findall('.//site'):
-        for alertitem in site.findall('.//alertitem'):
-            # Get basic alert info
-            alert_name = alertitem.find('alert').text
-            risk_code = int(alertitem.find('riskcode').text)
-            description = alertitem.find('desc').text
-            plugin_id = alertitem.find('pluginid').text
+    with open(csv_file, 'r') as f:
+        reader = csv.DictReader(f)
+        for row in reader:
+            # Parse dates
+            detection_date = datetime.strptime(row['Original Detection Date'], '%m/%d/%Y')
+            detection_date = detection_date.replace(tzinfo=timezone.utc)
             
-            # Map risk code to severity
-            severity_map = {
-                0: 'Informational',
-                1: 'Low',
-                2: 'Medium',
-                3: 'High'
-            }
-            severity = severity_map.get(risk_code, 'Unknown')
+            # Parse completion date if available
+            completion_date = None
+            if row['Scheduled Completion Date']:
+                try:
+                    completion_date = datetime.strptime(row['Scheduled Completion Date'], '%Y-%m-%d %H:%M:%S')
+                    completion_date = completion_date.replace(tzinfo=timezone.utc)
+                except ValueError:
+                    # If parsing fails, calculate based on risk rating
+                    completion_date = get_completion_date(row['Original Risk Rating'], detection_date)
+            else:
+                completion_date = get_completion_date(row['Original Risk Rating'], detection_date)
             
-            # Calculate completion date based on severity
-            completion_date = get_completion_date(severity, scan_date)
-            
-            # Create a finding for each instance
-            for idx, instance in enumerate(alertitem.findall('.//instance')):
-                uri = instance.find('uri').text
-                evidence = instance.find('evidence').text if instance.find('evidence') is not None else None
-                other_info = instance.find('otherinfo').text if instance.find('otherinfo') is not None else None
-                
-                # Add evidence and other info to description if available
-                full_description = description
-                if evidence:
-                    full_description += f"\n\nEvidence:\n{evidence}"
-                if other_info:
-                    full_description += f"\n\nAdditional Information:\n{other_info}"
-                
-                finding = Finding(
-                    finding_id=f"ZAP-{plugin_id}-{idx+1}",
-                    controls="RA-5",
-                    weakness_name=alert_name,
-                    weakness_description=full_description,
-                    weakness_detector_source="ZAP",
-                    weakness_source_identifier=plugin_id,
-                    asset_identifier=uri,
-                    point_of_contact="Chris Llanwarne",
-                    resources_required="None",
-                    overall_remediation_plan="Perform necessary updates to resolve the vulnerability",
-                    original_detection_date=scan_date,
-                    scheduled_completion_date=completion_date,
-                    planned_milestones=f"(1) {completion_date.strftime('%Y-%m-%d')}: Perform necessary updates to resolve the vulnerability",
-                    milestone_changes="",
-                    status_date=scan_date,
-                    vendor_dependency="No",
-                    last_vendor_check_in_date=None,
-                    vendor_dependent_product_name="N/A",
-                    original_risk_rating=severity,
-                    adjusted_risk_rating=None,
-                    risk_adjustment="",
-                    false_positive="",
-                    operational_requirement="",
-                    deviation_rationale=None,
-                    supporting_documents=None,
-                    comments=None,
-                    auto_approve="",
-                    binding_operational_directive_22_01_tracking="",
-                    binding_operational_directive_22_01_due_date=None,
-                    cve=None,
-                    service_name="Hail"
-                )
-                findings.append(finding)
+            # Create finding
+            finding = Finding(
+                finding_id=f"{row['ids']}",
+                controls="RA-5",
+                weakness_name=row['Weakness Name'],
+                weakness_description=row['Weakness Description'],
+                weakness_detector_source=row['Weakness Detector Source'],
+                weakness_source_identifier=row['Weakness Source Identifier'],
+                asset_identifier=row['Asset Identifier'],
+                point_of_contact="Chris Llanwarne",
+                resources_required="None",
+                overall_remediation_plan="Perform necessary updates to resolve the vulnerability",
+                original_detection_date=detection_date,
+                scheduled_completion_date=completion_date,
+                planned_milestones=f"(1) {completion_date.strftime('%Y-%m-%d')}: Perform necessary updates to resolve the vulnerability",
+                milestone_changes="",
+                status_date=datetime.now(timezone.utc),
+                vendor_dependency="No",
+                last_vendor_check_in_date=None,
+                vendor_dependent_product_name="N/A",
+                original_risk_rating=row['Original Risk Rating'],
+                adjusted_risk_rating=None,
+                risk_adjustment="",
+                false_positive="",
+                operational_requirement="",
+                deviation_rationale=None,
+                supporting_documents=None,
+                comments=None,
+                auto_approve="",
+                binding_operational_directive_22_01_tracking="",
+                binding_operational_directive_22_01_due_date=None,
+                cve=None,
+                service_name="Hail"
+            )
+            findings.append(finding)
     
     return findings
 
-def convert_alerts_to_findings(xml_file: str) -> str:
+def convert_alerts_to_findings(csv_file: str) -> str:
     """
-    Convert ZAP XML alerts to findings JSON format.
+    Convert ZAP CSV alerts to findings JSON format.
     
     Args:
-        xml_file: Path to the ZAP XML report file
+        csv_file: Path to the ZAP CSV report file
         
     Returns:
         Path to the output JSON file
     """
-    findings = parse_zap_xml(xml_file)
+    findings = parse_zap_csv(csv_file)
     
     # Convert findings to dictionaries
     findings_data = []
@@ -132,7 +112,7 @@ def convert_alerts_to_findings(xml_file: str) -> str:
         findings_data.append(finding_dict)
     
     # Generate output filename
-    input_path = Path(xml_file)
+    input_path = Path(csv_file)
     output_file = input_path.with_suffix('.findings.json')
     
     # Write findings to JSON file

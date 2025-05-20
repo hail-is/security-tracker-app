@@ -90,14 +90,14 @@ Commands for working with Trivy alerts are grouped under the `trivy` command:
 Commands for working with ZAP scan reports are grouped under the `zap` command:
 
 ```bash
-# Convert ZAP XML alerts to findings JSON format
-./cli.py zap alerts-to-findings <xml_file>
+# Convert ZAP CSV alerts to findings JSON format
+./cli.py zap alerts-to-findings <csv_file>
 ```
 
 This command:
-- Takes a ZAP XML report file as input
+- Takes a ZAP CSV report file as input
 - Converts each alert to a finding object with:
-  - Finding ID (based on ZAP plugin ID)
+  - Finding ID (based on ZAP alert ID)
   - Weakness name and description
   - Asset identifier (host)
   - Risk rating and confidence level

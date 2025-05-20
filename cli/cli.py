@@ -163,16 +163,16 @@ def apply_diff(poam_file: Path, diff_file: Path) -> None:
         sys.exit(1)
 
 @zap.command('alerts-to-findings')
-@click.argument('xml_file', type=click.Path(exists=True))
-def alerts_to_findings(xml_file):
-    """Convert ZAP XML alerts to findings JSON format.
+@click.argument('csv_file', type=click.Path(exists=True))
+def alerts_to_findings(csv_file):
+    """Convert ZAP CSV alerts to findings JSON format.
     
-    XML_FILE should be a ZAP XML report file.
+    CSV_FILE should be a ZAP CSV report file.
     The findings will be saved as a JSON file and the first finding will be displayed.
     """
     try:
         # Convert alerts to findings
-        output_file = convert_alerts_to_findings(xml_file)
+        output_file = convert_alerts_to_findings(csv_file)
         
         # Load and display first finding
         with open(output_file) as f:
