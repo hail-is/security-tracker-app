@@ -1,15 +1,13 @@
 """
-Module for comparing Trivy findings against existing POAMs.
+Module for comparing findings against existing POAMs.
 """
 from dataclasses import dataclass
 from typing import List, Optional, Tuple, Dict, Any
 from pathlib import Path
 from datetime import datetime
 
-from ..findings import Finding
-from ..poam import PoamFile, PoamEntry
-from ..diff import PoamFileDiff, compare_findings_to_poams
-from .poam_generator import generate_poams_from_findings
+from .findings import Finding
+from .poam import PoamFile, PoamEntry
 
 @dataclass
 class FindingPoamMatch:
@@ -18,13 +16,15 @@ class FindingPoamMatch:
     poam: PoamEntry
 
 @dataclass
-class TrivyAlertsDiff:
+class PoamFileDiff:
     """Represents the difference between current findings and existing POAMs."""
     new_findings: List[Finding]  # Findings without corresponding POAMs
     existing_matches: List[FindingPoamMatch]  # Findings matched to existing POAMs
     closed_poams: List[PoamEntry]  # POAMs without corresponding findings
     reopened_findings: List[FindingPoamMatch]  # Findings that match previously closed POAMs
     proposed_poams: List[Tuple[List[Finding], PoamEntry]]  # Proposed new POAMs with their findings
+    proposed_configuration_findings: List[Tuple[List[Finding], PoamEntry]] # Proposed new configuration findings
+    closed_configuration_findings: List[PoamEntry] # Configuration findings without matches
 
     def to_json(self) -> Dict[str, Any]:
         """
@@ -33,8 +33,11 @@ class TrivyAlertsDiff:
         Returns:
             Dictionary containing the diff results in a structured format
         """
-        def format_datetime(dt: datetime) -> str:
-            return dt.strftime("%Y-%m-%d") if dt else None
+        def format_datetime(dt: datetime | str) -> str:
+            if isinstance(dt, str):
+                return dt
+            else:
+                return dt.strftime("%Y-%m-%d") if dt else None
             
         def poam_to_full_dict(poam: PoamEntry) -> Dict[str, Any]:
             """Convert a POAM to a complete dictionary with all fields."""
@@ -83,7 +86,7 @@ class TrivyAlertsDiff:
                 "service_name": finding.service_name
             }
         
-        return {
+        result = {
             "metadata": {
                 "new_findings_count": len(self.new_findings),
                 "existing_matches_count": len(self.existing_matches),
@@ -108,6 +111,24 @@ class TrivyAlertsDiff:
             ],
             "close_poams": [poam.poam_id for poam in self.closed_poams]
         }
+
+        # Add configuration findings if present
+        if self.proposed_configuration_findings is not None:
+            result["metadata"]["proposed_configuration_findings_count"] = len(self.proposed_configuration_findings)
+            result["proposed_configuration_findings"] = [
+                {
+                    "poam": poam_to_full_dict(poam),
+                    "findings": [finding_to_dict(f) for f in findings],
+                    "finding_ids": [f.finding_id for f in findings]
+                }
+                for findings, poam in self.proposed_configuration_findings
+            ]
+            
+        if self.closed_configuration_findings is not None:
+            result["metadata"]["closed_configuration_findings_count"] = len(self.closed_configuration_findings)
+            result["closed_configuration_findings"] = [poam.poam_id for poam in self.closed_configuration_findings]
+
+        return result
 
     def print_summary(self, max_preview: int = 10) -> None:
         """Print a human-readable summary of the diff."""
@@ -162,25 +183,51 @@ class TrivyAlertsDiff:
             print(f"Weakness Name: {sample_poam.weakness_name}")
             print(f"Asset Identifiers: {sample_poam.asset_identifier}")
             print(f"Finding IDs: {sample_poam.comments}")
-            print(f"Detection Date: {sample_poam.original_detection_date.strftime('%Y-%m-%d')}")
+            # Handle case where date might already be a string
+            detection_date = sample_poam.original_detection_date
+            if isinstance(detection_date, datetime):
+                detection_date = detection_date.strftime('%Y-%m-%d')
+            print(f"Detection Date: {detection_date}")
             print(f"Risk Rating: {sample_poam.original_risk_rating}")
             if sample_poam.cve:
                 print(f"CVE: {sample_poam.cve}")
 
-def _is_exact_match(text1: str, text2: str) -> bool:
-    """
-    Check if two strings match exactly (case-insensitive).
-    
-    Args:
-        text1: First text string
-        text2: Second text string
-        
-    Returns:
-        True if strings match exactly (ignoring case), False otherwise
-    """
-    if not text1 or not text2:
+        # Print configuration findings if present
+        print("\n=== Proposed Configuration Findings ===")
+        print(f"Count: {len(self.proposed_configuration_findings)}")            
+        if self.proposed_configuration_findings:
+            for findings, poam in self.proposed_configuration_findings[:max_preview]:
+                finding_ids = [f.finding_id for f in findings]
+                print(f"{', '.join(finding_ids)} => {poam.poam_id}")
+            if len(self.proposed_configuration_findings) > max_preview:
+                print(f"... and {len(self.proposed_configuration_findings) - max_preview} more")
+
+            # Show sample of first proposed configuration finding
+            print("\nSample new Configuration Finding:")
+            sample_findings, sample_poam = self.proposed_configuration_findings[0]
+            print(f"POAM ID: {sample_poam.poam_id}")
+            print(f"Weakness Name: {sample_poam.weakness_name}")
+            print(f"Asset Identifiers: {sample_poam.asset_identifier}")
+            print(f"Finding IDs: {sample_poam.comments}")
+            detection_date = sample_poam.original_detection_date
+            if isinstance(detection_date, datetime):
+                detection_date = detection_date.strftime('%Y-%m-%d')
+            print(f"Detection Date: {detection_date}")
+            print(f"Risk Rating: {sample_poam.original_risk_rating}")
+            if sample_poam.cve:
+                print(f"CVE: {sample_poam.cve}")
+
+        print("\n=== Closed Configuration Findings ===")
+        print(f"Count: {len(self.closed_configuration_findings)}")
+        if self.closed_configuration_findings:
+            poam_ids = [poam.poam_id for poam in self.closed_configuration_findings]
+            print(f"Configuration Finding IDs no longer active: {', '.join(poam_ids)}")
+
+def _is_exact_match(str1: str, str2: str) -> bool:
+    """Check if two strings match exactly, ignoring case."""
+    if not str1 or not str2:
         return False
-    return text1.lower().strip() == text2.lower().strip()
+    return str1.lower().strip() == str2.lower().strip()
 
 def _is_asset_covered(finding_asset: str, poam_assets: str) -> bool:
     """
@@ -198,52 +245,42 @@ def _is_asset_covered(finding_asset: str, poam_assets: str) -> bool:
     return finding_asset.lower().strip() in poam_assets.lower().strip()
 
 def _find_matching_poam(finding: Finding, poams: List[PoamEntry]) -> Optional[FindingPoamMatch]:
-    """Find a matching POAM for a given finding based on exact weakness name match and asset coverage."""
-    for poam in poams:
-        # Weakness name must match exactly, and the finding's asset must be included in the POAM's assets
-        if (_is_exact_match(finding.weakness_name, poam.weakness_name) and 
-            _is_asset_covered(finding.asset_identifier, poam.asset_identifier)):
-            return FindingPoamMatch(finding=finding, poam=poam)
-    
-    return None
-
-
-def compare_findings_to_trivy_poams(findings: List[Finding], poam_file: Path) -> PoamFileDiff:
     """
-    Compare a list of findings against Trivy POAMs.
+    Find a matching POAM for a given finding.
     
     Args:
-        findings: List of current findings from Trivy
-        poam_file: Path to Excel file containing Trivy POAMs
+        finding: Finding to match
+        poams: List of POAMs to search
         
     Returns:
-        PoamFileDiff containing new, existing, closed, and reopened findings
+        FindingPoamMatch if a match is found, None otherwise
     """
-    # Load Trivy POAMs
-    poam_file_handler = PoamFile(poam_file)
-    open_poams, closed_poams = poam_file_handler.get_trivy_poam_entries()
-    
-    # Get all POAM IDs for generating new ones
-    all_poam_ids = [p.poam_id for p in [*open_poams, *closed_poams]]
-    
-    return compare_findings_to_poams(findings, open_poams, closed_poams, all_poam_ids, generate_poams_from_findings, store_as_configuration_findings=False)
-
+    for poam in poams:
+        # Match based on exact weakness name match and asset coverage
+        if _is_exact_match(finding.weakness_name, poam.weakness_name) and \
+           _is_asset_covered(finding.asset_identifier, poam.asset_identifier):
+            return FindingPoamMatch(finding=finding, poam=poam)
+    return None
 
 def compare_findings_to_poams(findings: List[Finding], 
                             open_poams: List[PoamEntry], 
                             closed_poams: List[PoamEntry],
-                            existing_poam_ids: List[str]) -> TrivyAlertsDiff:
+                            existing_poam_ids: List[str],
+                            poam_generator,
+                            store_as_configuration_findings: bool = False) -> PoamFileDiff:
     """
     Compare a list of findings against existing POAMs.
     
     Args:
-        findings: List of current findings from Trivy
+        findings: List of current findings
         open_poams: List of open POAMs
         closed_poams: List of closed POAMs
         existing_poam_ids: List of all existing POAM IDs
+        poam_generator: Function to generate POAMs from findings
+        store_as_configuration_findings: Whether to store results in configuration findings fields
         
     Returns:
-        TrivyAlertsDiff containing new, existing, closed, and reopened findings
+        PoamFileDiff containing new, existing, closed, and reopened findings
     """
     # Track which POAMs are matched
     matched_poams = set()
@@ -269,12 +306,14 @@ def compare_findings_to_poams(findings: List[Finding],
     closed_poams = [poam for poam in open_poams if poam not in matched_poams]
     
     # Generate proposed POAMs for new findings
-    proposed_poams = generate_poams_from_findings(new_findings, existing_poam_ids)
+    proposed_poams = poam_generator(new_findings, existing_poam_ids)
     
-    return TrivyAlertsDiff(
+    return PoamFileDiff(
         new_findings=new_findings,
         existing_matches=existing_matches,
-        closed_poams=closed_poams,
+        closed_poams=closed_poams if not store_as_configuration_findings else [],
         reopened_findings=reopened_findings,
-        proposed_poams=proposed_poams
-    ) 
+        proposed_poams=proposed_poams if not store_as_configuration_findings else [],
+        proposed_configuration_findings=proposed_poams if store_as_configuration_findings else [],
+        closed_configuration_findings=closed_poams if store_as_configuration_findings else []
+    )

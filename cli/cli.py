@@ -23,6 +23,7 @@ from tools.zap import convert_alerts_to_findings
 from tools.zap.diff import compare_findings_to_zap_poams
 from tools.cis.splitter import split_connected_sheet
 from tools.cis.converter import convert_to_findings_file
+from tools.cis.diff import compare_findings_to_cis_poams
 
 @click.group()
 def cli():
@@ -46,7 +47,7 @@ def zap():
 
 @cli.group()
 def cis():
-    """Commands for working with CIS scan reports."""
+    """Commands for working with CIS findings."""
     pass
 
 @poams.command('preview-trivy')
@@ -273,6 +274,42 @@ def csv_to_findings_cmd(csv_file: Path) -> None:
             click.echo(f"\nOutput saved to: {output_file}")
     except Exception as e:
         click.echo(f"Error converting CSV to findings: {str(e)}", err=True)
+        sys.exit(1)
+
+@cis.command('alerts-diff')
+@click.argument('findings_file', type=click.Path(exists=True))
+@click.argument('poam_file', type=click.Path(exists=True))
+@click.option('--json-output', type=click.Path(), help='Path to save JSON output')
+def alerts_diff(findings_file: str, poam_file: str, json_output: Optional[str]) -> None:
+    """
+    Compare CIS findings against existing configuration findings.
+    
+    FINDINGS_FILE: JSON file containing CIS findings
+    POAM_FILE: Excel file containing configuration findings
+    """
+    try:
+        # Load findings from JSON file
+        with open(findings_file) as f:
+            findings_data = json.load(f)
+            findings = [Finding.from_dict(f) for f in findings_data]
+        
+        # Compare findings to configuration findings
+        diff = compare_findings_to_cis_poams(findings, poam_file)
+        
+        # Print human readable summary
+        diff.print_summary()
+        
+        # Save JSON output if requested
+        if not json_output:
+            # Finding file as a path:
+            findings_path = Path(findings_file)
+            json_output = findings_path.with_suffix('.diff.json')
+        json_data = diff.to_json()
+        with open(json_output, 'w') as f:
+            json.dump(json_data, f, indent=2)
+            click.echo(f"JSON output saved to: {json_output}")
+    except Exception as e:
+        click.echo(f"Error comparing findings: {str(e)}", err=True)
         sys.exit(1)
 
 if __name__ == '__main__':

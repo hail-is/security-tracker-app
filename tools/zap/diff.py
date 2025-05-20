@@ -8,6 +8,7 @@ from datetime import datetime
 
 from ..findings import Finding
 from ..poam import PoamFile, PoamEntry
+from ..diff import PoamFileDiff, compare_findings_to_poams
 from .poam_generator import generate_poams_from_findings
 
 @dataclass
@@ -204,26 +205,6 @@ def _find_matching_poam(finding: Finding, poams: List[PoamEntry]) -> Optional[Fi
     
     return None
 
-def compare_findings_to_zap_poams(findings: List[Finding], poam_file: Path) -> ZapAlertsDiff:
-    """
-    Compare a list of findings against ZAP POAMs.
-    
-    Args:
-        findings: List of current findings from ZAP
-        poam_file: Path to Excel file containing ZAP POAMs
-        
-    Returns:
-        ZapAlertsDiff containing new, existing, closed, and reopened findings
-    """
-    # Load ZAP POAMs
-    poam_file_handler = PoamFile(poam_file)
-    open_poams, closed_poams = get_zap_poam_entries(poam_file_handler)
-    
-    # Get all POAM IDs for generating new ones
-    all_poam_ids = [p.poam_id for p in [*open_poams, *closed_poams]]
-    
-    return compare_findings_to_poams(findings, open_poams, closed_poams, all_poam_ids)
-
 def get_zap_poam_entries(poam_file: PoamFile) -> Tuple[List[PoamEntry], List[PoamEntry]]:
     """
     Get ZAP POAMs from a POAM file.
@@ -249,52 +230,22 @@ def get_zap_poam_entries(poam_file: PoamFile) -> Tuple[List[PoamEntry], List[Poa
     
     return open_poams, closed_poams
 
-def compare_findings_to_poams(findings: List[Finding], 
-                            open_poams: List[PoamEntry], 
-                            closed_poams: List[PoamEntry],
-                            existing_poam_ids: List[str]) -> ZapAlertsDiff:
+def compare_findings_to_zap_poams(findings: List[Finding], poam_file: Path) -> PoamFileDiff:
     """
-    Compare a list of findings against existing POAMs.
+    Compare a list of findings against ZAP POAMs.
     
     Args:
         findings: List of current findings from ZAP
-        open_poams: List of open POAMs
-        closed_poams: List of closed POAMs
-        existing_poam_ids: List of all existing POAM IDs
+        poam_file: Path to Excel file containing ZAP POAMs
         
     Returns:
-        ZapAlertsDiff containing new, existing, closed, and reopened findings
+        PoamFileDiff containing new, existing, closed, and reopened findings
     """
-    # Track which POAMs are matched
-    matched_poams = set()
-    new_findings = []
-    existing_matches = []
-    reopened_findings = []
+    # Load ZAP POAMs
+    poam_file_handler = PoamFile(poam_file)
+    open_poams, closed_poams = get_zap_poam_entries(poam_file_handler)
     
-    # First check for matches against open POAMs
-    for finding in findings:
-        match = _find_matching_poam(finding, open_poams)
-        if match:
-            existing_matches.append(match)
-            matched_poams.add(match.poam)
-        else:
-            # If no match in open POAMs, check closed POAMs
-            closed_match = _find_matching_poam(finding, closed_poams)
-            if closed_match:
-                reopened_findings.append(closed_match)
-            else:
-                new_findings.append(finding)
+    # Get all POAM IDs for generating new ones
+    all_poam_ids = [p.poam_id for p in [*open_poams, *closed_poams]]
     
-    # Find closed POAMs (those without matches)
-    closed_poams = [poam for poam in open_poams if poam not in matched_poams]
-    
-    # Generate proposed POAMs for new findings
-    proposed_poams = generate_poams_from_findings(new_findings, existing_poam_ids)
-    
-    return ZapAlertsDiff(
-        new_findings=new_findings,
-        existing_matches=existing_matches,
-        closed_poams=closed_poams,
-        reopened_findings=reopened_findings,
-        proposed_poams=proposed_poams
-    ) 
+    return compare_findings_to_poams(findings, open_poams, closed_poams, all_poam_ids, generate_poams_from_findings, store_as_configuration_findings=False)
