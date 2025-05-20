@@ -1,7 +1,7 @@
 """
 Module for generating POAMs from CIS findings.
 """
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import List, Tuple, Dict
 from collections import defaultdict
 
@@ -20,7 +20,7 @@ def _get_next_poam_id(existing_poam_ids: List[str], current_year: int = None) ->
         Next available POAM ID in format YYYY-CISXXXX
     """
     if current_year is None:
-        current_year = datetime.now().year
+        current_year = datetime.now(timezone.utc).year
         
     # Filter to just this year's CIS POAMs
     year_prefix = f"{current_year}-CIS"
@@ -46,7 +46,7 @@ def _get_completion_date(risk_rating: str) -> datetime:
     Returns:
         Datetime object for completion date
     """
-    today = datetime.now()
+    today = datetime.now(timezone.utc)
     
     if risk_rating.lower() == "critical":
         return today + timedelta(days=15)
@@ -70,8 +70,9 @@ def _group_findings_by_weakness_and_date(findings: List[Finding]) -> Dict[tuple,
     groups = defaultdict(list)
     for finding in findings:
         completion_date = _get_completion_date(finding.original_risk_rating)
-        key = (finding.weakness_name, completion_date)
-        groups[key].append(finding)
+        # Use only the date part for grouping key, but store the full datetime with the finding
+        key = (finding.weakness_name, completion_date.date())
+        groups[key].append((finding, completion_date))
     return dict(groups)
 
 def generate_poams_from_findings(findings: List[Finding], existing_poam_ids: List[str], current_year: int = None) -> List[Tuple[List[Finding], PoamEntry]]:
@@ -91,15 +92,19 @@ def generate_poams_from_findings(findings: List[Finding], existing_poam_ids: Lis
     # Group findings by weakness name and completion date
     grouped_findings = _group_findings_by_weakness_and_date(findings)
     
-    for (weakness_name, completion_date), group in grouped_findings.items():
+    for (weakness_name, _), group in grouped_findings.items():
+        # Unpack findings and their completion dates
+        findings_list = [f for f, _ in group]
+        completion_date = group[0][1]  # Use the completion date from the first finding (they're all the same)
+        
         # Get earliest detection date from group
-        detection_date = min(f.original_detection_date for f in group)
+        detection_date = min(f.original_detection_date for f in findings_list)
         
         # Get highest risk rating from group
-        risk_rating = max(f.original_risk_rating for f in group)
+        risk_rating = max(f.original_risk_rating for f in findings_list)
         
         # Combine asset identifiers
-        asset_ids = sorted(set(f.asset_identifier for f in group))
+        asset_ids = sorted(set(f.asset_identifier for f in findings_list))
         combined_asset_id = ", ".join(asset_ids)
         
         # Generate POAM ID
@@ -122,7 +127,7 @@ def generate_poams_from_findings(findings: List[Finding], existing_poam_ids: Lis
             scheduled_completion_date=completion_date,
             planned_milestones="",
             milestone_changes="",
-            status_date=datetime.now(),
+            status_date=datetime.now(timezone.utc),
             vendor_dependency="No",
             last_vendor_check_in_date=None,
             vendor_dependent_product_name="",
@@ -133,7 +138,7 @@ def generate_poams_from_findings(findings: List[Finding], existing_poam_ids: Lis
             operational_requirement="No",
             deviation_rationale="",
             supporting_documents="",
-            comments=", ".join(f.finding_id for f in group),  # Store finding IDs in comments
+            comments=", ".join(f.finding_id for f in findings_list),  # Store finding IDs in comments
             auto_approve="No",
             binding_operational_directive_22_01_tracking="No",
             binding_operational_directive_22_01_due_date=None,
@@ -141,6 +146,6 @@ def generate_poams_from_findings(findings: List[Finding], existing_poam_ids: Lis
             service_name=""  # CIS findings don't have service names
         )
         
-        result.append((group, poam))
+        result.append((findings_list, poam))
         
     return result 

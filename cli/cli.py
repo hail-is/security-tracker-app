@@ -5,8 +5,6 @@ import click
 import sys
 import os
 from pathlib import Path
-import yaml
-from datetime import datetime
 from typing import Optional
 
 # Add the project root to the Python path
