@@ -33,8 +33,10 @@ def split_connected_sheet(input_file: Path) -> list[Path]:
     
     # Get base filename without "(Connected Sheet)" suffix
     base_name = input_file.stem
-    if base_name.endswith("(Connected Sheet)"):
-        base_name = base_name[:-len("(Connected Sheet)")].strip()
+
+    # Remove "(Connected Sheet)" (and anything after it)
+    if "(Connected Sheet)" in base_name:
+        base_name = base_name.split("(Connected Sheet)")[0].strip()
     
     # Group by date and write separate files
     output_files = []
