@@ -4,6 +4,7 @@ import json
 import click
 import sys
 import os
+import traceback
 from pathlib import Path
 from typing import Optional
 
@@ -160,6 +161,8 @@ def apply_diff(poam_file: Path, diff_file: Path) -> None:
         click.echo(f"Successfully applied diff changes to {poam_file}")
     except Exception as e:
         click.echo(f"Error applying diff: {str(e)}", err=True)
+        click.echo("\nFull traceback:", err=True)
+        click.echo(traceback.format_exc(), err=True)
         sys.exit(1)
 
 @zap.command('alerts-to-findings')
