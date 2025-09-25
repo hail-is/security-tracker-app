@@ -118,12 +118,25 @@ def alerts_diff(poam_file: Path, alerts_csv: Path):
     - New findings that need POAMs created
     - Existing findings that already have POAMs
     - Closed POAMs that no longer have corresponding findings
+    
+    Note: Findings with Info severity are automatically excluded.
     """
     try:
         # Import findings from CSV
-        findings = import_alerts_from_csv(alerts_csv)
-        if not findings:
+        all_findings = import_alerts_from_csv(alerts_csv)
+        if not all_findings:
             click.echo("No findings found in CSV file", err=True)
+            sys.exit(1)
+        
+        # Filter out Info severity findings
+        findings = [f for f in all_findings if f.original_risk_rating.lower() != 'info']
+        info_count = len(all_findings) - len(findings)
+        
+        if info_count > 0:
+            click.echo(f"Excluded {info_count} findings with Info severity")
+        
+        if not findings:
+            click.echo("No findings remaining after filtering out Info severity", err=True)
             sys.exit(1)
             
         # Compare findings against POAMs
@@ -196,12 +209,26 @@ def alerts_to_findings(csv_file):
 @click.argument('poam_file', type=click.Path(exists=True))
 @click.option('--json-output', type=click.Path(), help='Path to save JSON output')
 def alerts_diff(findings_file: str, poam_file: str, json_output: Optional[str]) -> None:
-    """Compare ZAP findings against existing POAMs."""
+    """Compare ZAP findings against existing POAMs.
+    
+    Note: Findings with Info severity are automatically excluded.
+    """
     try:
         # Load findings from JSON file
         with open(findings_file) as f:
             findings_data = json.load(f)
-            findings = [Finding.from_dict(f) for f in findings_data]
+            all_findings = [Finding.from_dict(f) for f in findings_data]
+        
+        # Filter out Info severity findings
+        findings = [f for f in all_findings if f.original_risk_rating.lower() != 'info']
+        info_count = len(all_findings) - len(findings)
+        
+        if info_count > 0:
+            click.echo(f"Excluded {info_count} findings with Info severity")
+        
+        if not findings:
+            click.echo("No findings remaining after filtering out Info severity", err=True)
+            sys.exit(1)
         
         # Compare findings to POAMs
         diff = compare_findings_to_zap_poams(findings, poam_file)
@@ -287,12 +314,25 @@ def alerts_diff(findings_file: str, poam_file: str, json_output: Optional[str]) 
     
     FINDINGS_FILE: JSON file containing CIS findings
     POAM_FILE: Excel file containing configuration findings
+    
+    Note: Findings with Info severity are automatically excluded.
     """
     try:
         # Load findings from JSON file
         with open(findings_file) as f:
             findings_data = json.load(f)
-            findings = [Finding.from_dict(f) for f in findings_data]
+            all_findings = [Finding.from_dict(f) for f in findings_data]
+        
+        # Filter out Info severity findings
+        findings = [f for f in all_findings if f.original_risk_rating.lower() != 'info']
+        info_count = len(all_findings) - len(findings)
+        
+        if info_count > 0:
+            click.echo(f"Excluded {info_count} findings with Info severity")
+        
+        if not findings:
+            click.echo("No findings remaining after filtering out Info severity", err=True)
+            sys.exit(1)
         
         # Compare findings to configuration findings
         diff = compare_findings_to_cis_poams(findings, poam_file)
