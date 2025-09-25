@@ -10,8 +10,8 @@ from tools.trivy.diff import (
     _is_exact_match,
     _is_asset_covered,
     _find_matching_poam,
-    compare_findings_to_poams,
 )
+from tools.diff import compare_findings_to_poams
 
 def create_test_finding(finding_id: str, weakness_name: str, asset_identifier: str) -> Finding:
     """Helper to create a test Finding with minimal required fields."""
@@ -212,3 +212,74 @@ def test_compare_findings_to_poams():
     
     # Verify closed POAMs
     assert {poam.poam_id for poam in diff.closed_poams} == {"POAM-002", "POAM-003"}
+
+def test_cis_configuration_findings_closed_when_no_matches():
+    """Test that CIS configuration findings are marked as closed when no findings match them."""
+    # Create empty findings list (no current findings)
+    findings = []
+    
+    # Create test configuration findings (simulating your real case)
+    config_findings = [
+        create_test_poam("2025-CIS0005-A", "Some Configuration Issue", "asset-1, asset-2, asset-3, asset-4, asset-5"),
+        create_test_poam("2025-CIS0006-B", "Another Configuration Issue", "asset-10, asset-11"),
+    ]
+    
+    # Mock poam_generator function
+    def mock_poam_generator(new_findings, existing_poam_ids):
+        return []
+    
+    # Compare findings to POAMs with store_as_configuration_findings=True
+    diff = compare_findings_to_poams(
+        findings=findings,
+        open_poams=config_findings,
+        closed_poams=[],
+        existing_poam_ids=["2025-CIS0005-A", "2025-CIS0006-B"],
+        poam_generator=mock_poam_generator,
+        store_as_configuration_findings=True
+    )
+    
+    # Verify that all configuration findings are marked as closed
+    assert len(diff.closed_configuration_findings) == 2
+    assert {poam.poam_id for poam in diff.closed_configuration_findings} == {"2025-CIS0005-A", "2025-CIS0006-B"}
+    
+    # Verify no new findings or matches
+    assert len(diff.new_findings) == 0
+    assert len(diff.existing_matches) == 0
+    assert len(diff.reopened_findings) == 0
+    assert len(diff.proposed_configuration_findings) == 0
+
+def test_cis_configuration_findings_partial_matches():
+    """Test that only unmatched CIS configuration findings are marked as closed."""
+    # Create findings that match some but not all configuration findings
+    findings = [
+        create_test_finding("CIS-001", "Some Configuration Issue", "asset-1"),  # Should match first config finding
+    ]
+    
+    # Create test configuration findings
+    config_findings = [
+        create_test_poam("2025-CIS0005-A", "Some Configuration Issue", "asset-1, asset-2, asset-3"),
+        create_test_poam("2025-CIS0006-B", "Another Configuration Issue", "asset-10, asset-11"),
+    ]
+    
+    # Mock poam_generator function
+    def mock_poam_generator(new_findings, existing_poam_ids):
+        return []
+    
+    # Compare findings to POAMs with store_as_configuration_findings=True
+    diff = compare_findings_to_poams(
+        findings=findings,
+        open_poams=config_findings,
+        closed_poams=[],
+        existing_poam_ids=["2025-CIS0005-A", "2025-CIS0006-B"],
+        poam_generator=mock_poam_generator,
+        store_as_configuration_findings=True
+    )
+    
+    # Verify that only the unmatched configuration finding is marked as closed
+    assert len(diff.closed_configuration_findings) == 1
+    assert diff.closed_configuration_findings[0].poam_id == "2025-CIS0006-B"
+    
+    # Verify existing match
+    assert len(diff.existing_matches) == 1
+    assert diff.existing_matches[0].poam.poam_id == "2025-CIS0005-A"
+    assert diff.existing_matches[0].finding.finding_id == "CIS-001"
