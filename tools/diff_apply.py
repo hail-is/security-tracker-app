@@ -175,14 +175,54 @@ def apply_diff(poam_file: Path, diff_json: Dict[str, Any]) -> None:
         # If anything goes wrong, leave the half-edited copy for inspection
         raise type(e)(f"Error applying diff changes. Incomplete edit saved as {editable_copy}. Error: {str(e)}") from e
 
-def apply_diff_from_files(poam_file: Path, diff_file: Path) -> None:
+def merge_diffs(diff_files: List[Path]) -> Dict[str, Any]:
+    """
+    Merge multiple diff JSON files into a single diff.
+    
+    Args:
+        diff_files: List of paths to diff JSON files
+        
+    Returns:
+        Merged diff dictionary
+        
+    Raises:
+        ValueError: If no diff files provided or if files are invalid
+    """
+    if not diff_files:
+        raise ValueError("No diff files provided")
+    
+    merged_diff = {
+        "new_poams": [],
+        "reopen_poams": [],
+        "close_poams": [],
+        "proposed_configuration_findings": [],
+        "closed_configuration_findings": []
+    }
+    
+    for diff_file in diff_files:
+        if not diff_file.exists():
+            raise ValueError(f"Diff file does not exist: {diff_file}")
+        
+        try:
+            with open(diff_file, 'r') as f:
+                diff_data = json.load(f)
+        except (json.JSONDecodeError, IOError) as e:
+            raise ValueError(f"Error reading diff file {diff_file}: {e}") from e
+        
+        # Merge each section
+        for key in merged_diff.keys():
+            if key in diff_data and isinstance(diff_data[key], list):
+                merged_diff[key].extend(diff_data[key])
+    
+    return merged_diff
+
+def apply_diff_from_files(poam_file: Path, diff_files: List[Path]) -> None:
     """
     Apply diff changes from a JSON file to a POAM Excel file.
     
     Args:
         poam_file: Path to the POAM Excel file
-        diff_file: Path to the JSON diff file
+        diff_files: List of paths to JSON diff files
     """
-    with open(diff_file, 'r') as f:
-        diff_json = json.load(f)
-    apply_diff(poam_file, diff_json) 
+    merged_diff = merge_diffs(diff_files)
+    apply_diff(poam_file, merged_diff)

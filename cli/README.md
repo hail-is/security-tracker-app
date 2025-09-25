@@ -131,5 +131,13 @@ Each command includes error handling and will provide helpful error messages if 
 
 5. Apply diff changes to update POAMs:
    ```bash
+   # Apply single diff file
    ./cli.py poams apply-diff existing_poams.xlsx alerts_20240513.diff.json
-   ``` 
+   
+   # Apply multiple diff files
+   ./cli.py poams apply-diff existing_poams.xlsx alerts1.diff.json alerts2.diff.json alerts3.diff.json
+   ```
+
+   > [!NOTE]
+   > We can merge the diff files before applying with `./cli.py poams merge-diffs` before applying, but the apply command also
+   > accepts multiple diff files natively.
