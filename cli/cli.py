@@ -205,10 +205,10 @@ def alerts_to_findings(csv_file):
         sys.exit(1)
 
 @zap.command('alerts-diff')
-@click.argument('findings_file', type=click.Path(exists=True))
 @click.argument('poam_file', type=click.Path(exists=True))
+@click.argument('findings_file', type=click.Path(exists=True))
 @click.option('--json-output', type=click.Path(), help='Path to save JSON output')
-def alerts_diff(findings_file: str, poam_file: str, json_output: Optional[str]) -> None:
+def alerts_diff(poam_file: str, findings_file: str, json_output: Optional[str]) -> None:
     """Compare ZAP findings against existing POAMs.
     
     Note: Findings with Info severity are automatically excluded.
@@ -305,10 +305,10 @@ def csv_to_findings_cmd(csv_file: Path) -> None:
         sys.exit(1)
 
 @cis.command('alerts-diff')
-@click.argument('findings_file', type=click.Path(exists=True))
 @click.argument('poam_file', type=click.Path(exists=True))
+@click.argument('findings_file', type=click.Path(exists=True))
 @click.option('--json-output', type=click.Path(), help='Path to save JSON output')
-def alerts_diff(findings_file: str, poam_file: str, json_output: Optional[str]) -> None:
+def alerts_diff(poam_file: str, findings_file: str, json_output: Optional[str]) -> None:
     """
     Compare CIS findings against existing configuration findings.
     
