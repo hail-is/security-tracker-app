@@ -80,12 +80,13 @@ def date_plus(iso_date_string: str, days_to_add: int) -> str:
     except ValueError as e:
         raise ValueError(f"Invalid ISO date string format: {iso_date_string}") from e
 
-def convert_alerts_to_poam(alerts_file: Path) -> Path:
+def convert_alerts_to_poam(alerts_file: Path, output_path: Path = None) -> Path:
     """
     Convert GitHub Trivy alerts JSON to POAM CSV format.
     
     Args:
         alerts_file: Path to the JSON file containing GitHub alerts
+        output_path: Optional path for the output file. If None, uses same parent directory as input file.
         
     Returns:
         Path to the generated CSV file
@@ -136,9 +137,12 @@ def convert_alerts_to_poam(alerts_file: Path) -> Path:
         
         rows.append(row)
     
-    # Generate output filename with timestamp
-    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    output_file = ensure_working_dir() / f"trivy_alerts_{timestamp}.csv"
+    # Determine output file path
+    if output_path is None:
+        # Use same parent directory as input file, change extension to .findings.csv
+        output_file = alerts_file.parent / f"{alerts_file.stem}.findings.csv"
+    else:
+        output_file = output_path
     
     # Write CSV file
     with output_file.open('w', newline='') as csvfile:

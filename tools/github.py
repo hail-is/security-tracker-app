@@ -8,19 +8,23 @@ from pathlib import Path
 
 from .utils import ensure_working_dir
 
-def download_trivy_alerts() -> Path:
+def download_trivy_alerts(output_dir: Path = None) -> Path:
     """
     Download Trivy alerts from GitHub code scanning API.
     Uses gh CLI tool to handle authentication and pagination.
     
+    Args:
+        output_dir: Directory to save the alerts file. If None, uses working directory.
+    
     Returns:
         Path to the downloaded JSON file
     """
-    working_dir = ensure_working_dir()
+    if output_dir is None:
+        output_dir = ensure_working_dir()
     
     # Generate timestamp for the filename
-    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    output_file = working_dir / f"trivy_alerts_{timestamp}.json"
+    timestamp = datetime.now().strftime("%Y%m%d")
+    output_file = output_dir / f"trivy_alerts_{timestamp}.json"
     
     try:
         # Run gh command and capture output

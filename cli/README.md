@@ -111,12 +111,20 @@ Each command includes error handling and will provide helpful error messages if 
 
 1. Download alerts from GitHub:
    ```bash
+   # Download to default location (WORKING env var or pwd/working)
    ./cli.py trivy download-alerts
+   
+   # Download to specific file
+   ./cli.py trivy download-alerts --destination /path/to/alerts.json
    ```
 
 2. Convert the downloaded JSON to CSV:
    ```bash
+   # Convert with default .findings.csv extension in same directory
    ./cli.py trivy convert-alerts alerts_20240513.json
+   
+   # Convert to specific output file
+   ./cli.py trivy convert-alerts alerts_20240513.json --output /path/to/output.csv
    ```
 
 3. Compare new alerts against existing POAMs:

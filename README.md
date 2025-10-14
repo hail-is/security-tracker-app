@@ -61,10 +61,10 @@ The CLI is organized into the following command groups:
 2. `trivy` - Commands for working with Trivy:
    ```bash
    # Download Trivy alerts from GitHub code scanning API
-   ./cli/cli.py trivy download-alerts
+   ./cli/cli.py trivy download-alerts [--destination <file_path>]
    
    # Convert GitHub Trivy alerts JSON to POAM CSV format
-   ./cli/cli.py trivy convert-alerts <alerts_file>
+   ./cli/cli.py trivy convert-alerts <alerts_file> [--output <file_path>]
    
    # Compare Trivy alerts against existing POAMs
    ./cli/cli.py trivy alerts-diff <poam_file> <alerts_csv>

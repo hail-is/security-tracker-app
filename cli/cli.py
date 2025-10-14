@@ -67,20 +67,31 @@ def preview_trivy(file_path, limit):
         sys.exit(1)
 
 @trivy.command('download-alerts')
-def download_alerts():
+@click.option('--destination', '-d', type=click.Path(), help='Destination file path for the alerts JSON file')
+def download_alerts(destination):
     """Download Trivy alerts from GitHub code scanning API.
     
-    REPO: Optional GitHub repository in owner/name format (e.g. 'owner/repo')
-          If not provided, defaults to configured repository
+    If destination is not specified, uses WORKING environment variable or pwd/working
+    and sets filename to trivy-alerts-<date>.json
     
     Requires one of:
     1. GitHub CLI (gh) to be installed and authenticated via 'gh auth login'
     2. GitHub token provided via --token option or GITHUB_TOKEN environment variable
-    
-    The alerts will be saved as a JSON file in the working directory.
     """
     try:
-        output_file = download_trivy_alerts()
+        if destination:
+            # User provided a specific file path
+            output_file = Path(destination)
+            output_dir = output_file.parent
+            output_file = download_trivy_alerts(output_dir)
+            # Rename to the exact file the user requested
+            if output_file.name != Path(destination).name:
+                final_output = Path(destination)
+                output_file.rename(final_output)
+                output_file = final_output
+        else:
+            # Use default behavior with WORKING env var or pwd/working
+            output_file = download_trivy_alerts()
         click.echo(f"Successfully downloaded alerts to: {output_file}")
     except Exception as e:
         click.echo(f"Error: {str(e)}", err=True)
@@ -88,17 +99,19 @@ def download_alerts():
 
 @trivy.command('convert-alerts')
 @click.argument('alerts_file', type=click.Path(exists=True))
-def convert_alerts(alerts_file):
+@click.option('--output', '-o', type=click.Path(), help='Output file path (default: same directory as input with .findings.csv extension)')
+def convert_alerts(alerts_file, output):
     """Convert GitHub Trivy alerts JSON to POAM CSV format.
     
     ALERTS_FILE should be a JSON file containing GitHub code scanning alerts.
     The file can be obtained using the download-alerts command.
     
-    The converted POAM data will be saved as a CSV file in the working directory.
+    The converted POAM data will be saved as a CSV file with .findings.csv extension.
     """
     try:
         alerts_path = Path(alerts_file)
-        output_file = convert_alerts_to_poam(alerts_path)
+        output_path = Path(output) if output else None
+        output_file = convert_alerts_to_poam(alerts_path, output_path)
         click.echo(f"Successfully converted alerts to POAM format: {output_file}")
     except Exception as e:
         click.echo(f"Error: {str(e)}", err=True)
