@@ -89,12 +89,13 @@ def parse_zap_csv(csv_file: str) -> List[Finding]:
     
     return findings
 
-def convert_alerts_to_findings(csv_file: str) -> str:
+def convert_alerts_to_findings(csv_file: str, output_file: str = None) -> str:
     """
     Convert ZAP CSV alerts to findings JSON format.
     
     Args:
         csv_file: Path to the ZAP CSV report file
+        output_file: Optional output file path. If None, uses input file with .findings.json extension
         
     Returns:
         Path to the output JSON file
@@ -111,12 +112,13 @@ def convert_alerts_to_findings(csv_file: str) -> str:
                 finding_dict[key] = value.strftime('%Y-%m-%d %H:%M:%S')
         findings_data.append(finding_dict)
     
-    # Generate output filename
-    input_path = Path(csv_file)
-    output_file = input_path.with_suffix('.findings.json')
+    # Determine output filename
+    if output_file is None:
+        input_path = Path(csv_file)
+        output_file = str(input_path.with_suffix('.findings.json'))
     
     # Write findings to JSON file
     with open(output_file, 'w') as f:
         json.dump(findings_data, f, indent=2)
     
-    return str(output_file) 
+    return output_file 

@@ -6,12 +6,13 @@ import pandas as pd
 from datetime import datetime
 import os
 
-def split_connected_sheet(input_file: Path) -> list[Path]:
+def split_connected_sheet(input_file: Path, output_dir: Path = None) -> list[Path]:
     """
     Split a CIS connected sheet Excel file into multiple CSV files by date.
     
     Args:
         input_file: Path to the input Excel file
+        output_dir: Optional output directory. If None, uses input directory/Divided CIS Scans
         
     Returns:
         List of paths to the generated CSV files
@@ -26,7 +27,8 @@ def split_connected_sheet(input_file: Path) -> list[Path]:
     df = pd.read_excel(input_file)
     
     # Output directory is input directory with a "Divided CIS Scans" subdirectory
-    output_dir = input_file.parent / "Divided CIS Scans"
+    if output_dir is None:
+        output_dir = input_file.parent / "Divided CIS Scans"
 
     # Ensure output directory exists
     output_dir.mkdir(exist_ok=True)

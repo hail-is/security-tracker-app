@@ -24,6 +24,7 @@ from tools.cis.splitter import split_connected_sheet
 from tools.cis.converter import convert_to_findings_file
 from tools.cis.diff import compare_findings_to_cis_poams
 
+
 @click.group()
 def cli():
     """Security tools CLI."""
@@ -244,9 +245,131 @@ def merge_diffs_cmd(diff_files: tuple, output: Optional[Path]) -> None:
         click.echo(traceback.format_exc(), err=True)
         sys.exit(1)
 
+@poams.command('weekly-update')
+def weekly_update():
+    """Interactive weekly update process for POAMs.
+    
+    This command guides you through the weekly update process including:
+    - Setting up working directory
+    - Processing Trivy alerts
+    - Processing CIS findings
+    - Processing ZAP scans
+    """
+    from datetime import datetime
+    
+    try:
+        # 1. Prompt for working directory
+        today = datetime.now().strftime("%Y-%m-%d")
+        default_working_dir = f"working/{today}"
+        working_dir = click.prompt("Working directory", default=default_working_dir)
+        working_path = Path(working_dir)
+        working_path.mkdir(parents=True, exist_ok=True)
+        
+        # 2. Print current directory contents
+        click.echo(f"\nCurrent directory contents:")
+        items = list(sorted(working_path.iterdir()))
+        if len(items) > 0:
+            for item in items:
+                click.echo(f"  {item}")
+        else:
+            click.echo("  (empty)")
+        
+        # 3. Ask for input file paths
+        click.echo(f"\n--- Input Files ---")
+        
+        # Find files in working directory
+        cis_files = list(working_path.glob("*CIS*"))
+        hail_files = list(working_path.glob("hail_report*"))
+        poam_files = list(working_path.glob("*POAM*"))
+        
+        # Use the first found file or empty string if none found
+        cis_default = str(cis_files[0]) if cis_files else ""
+        zap_default = str(hail_files[0]) if hail_files else ""
+        poams_default = str(poam_files[0]) if poam_files else ""
+
+        cis_findings = click.prompt("Path to continuous CIS findings sheet", default=cis_default)
+        zap_scan = click.prompt("Path to most recent ZAP scan", default=zap_default)
+        poams_file = click.prompt("Path to current POAMs file", default=poams_default)
+        
+        # 4. Trivy actions
+        click.echo(f"\n--- Trivy Actions ---")
+        trivy_alerts_file = working_path / f"trivy-alerts-{today}.json"
+        trivy_findings_file = working_path / f"trivy-findings-{today}.findings.csv"
+        
+        skip_trivy = False
+        if trivy_findings_file.exists():
+            skip_trivy = click.confirm(f"Trivy findings file {trivy_findings_file} already exists. Skip Trivy actions?")
+        
+        if not skip_trivy:
+            if click.confirm(f"Download Trivy alerts to {trivy_alerts_file}?"):
+                click.echo(f"> trivy download-alerts -d {trivy_alerts_file}")
+                download_trivy_alerts(trivy_alerts_file.parent)
+                # Rename to the exact file we want
+                if trivy_alerts_file.exists():
+                    trivy_alerts_file.unlink()  # Remove if it exists with different name
+                # Find the actual downloaded file and rename it
+                for file in working_path.glob("trivy_alerts_*.json"):
+                    file.rename(trivy_alerts_file)
+                    break
+            
+            if click.confirm(f"Convert Trivy alerts to findings CSV?"):
+                click.echo(f"> trivy convert-alerts {trivy_alerts_file} -o {trivy_findings_file}")
+                convert_alerts_to_poam(trivy_alerts_file, trivy_findings_file)
+        
+        # 5. CIS actions
+        click.echo(f"\n--- CIS Actions ---")
+        split_output_dir = working_path / "Divided CIS Scans"
+        cis_findings_file = working_path / f"cis-findings-{today}.findings.json"
+        
+        skip_cis = False
+        if cis_findings_file.exists():
+            skip_cis = click.confirm(f"CIS findings file {cis_findings_file} already exists. Skip CIS actions?")
+        
+        if not skip_cis:
+            if click.confirm(f"Split CIS connected sheet?"):
+                click.echo(f"> cis split-connected-sheet {cis_findings} -o {split_output_dir}")
+                split_connected_sheet(Path(cis_findings), split_output_dir)
+                
+                # Find the most recent findings file
+                if split_output_dir.exists():
+                    csv_files = list(split_output_dir.glob("*.csv"))
+                    if csv_files:
+                        most_recent_file = max(csv_files, key=lambda f: f.stat().st_mtime)
+                        click.echo(f"Most recent findings file: {most_recent_file}")
+                        
+                        if click.confirm(f"Convert CIS CSV to findings?"):
+                            click.echo(f"> cis csv-to-findings {most_recent_file} -o {cis_findings_file}")
+                            convert_to_findings_file(most_recent_file, cis_findings_file)
+        
+        # 6. ZAP actions
+        click.echo(f"\n--- ZAP Actions ---")
+        zap_findings_file = working_path / f"zap-findings-{today}.findings.json"
+        
+        skip_zap = False
+        if zap_findings_file.exists():
+            skip_zap = click.confirm(f"ZAP findings file {zap_findings_file} already exists. Skip ZAP actions?")
+        
+        if not skip_zap:
+            if click.confirm(f"Convert ZAP scan to findings?"):
+                click.echo(f"> zap alerts-to-findings {zap_scan} -o {zap_findings_file}")
+                convert_alerts_to_findings(zap_scan, str(zap_findings_file))
+        
+        click.echo(f"\n--- Weekly Update Complete ---")
+        click.echo(f"Working directory: {working_path}")
+        click.echo(f"Generated files:")
+        click.echo(f"  trivy findings: {trivy_findings_file}")
+        click.echo(f"  cis findings: {cis_findings_file}")
+        click.echo(f"  zap findings: {zap_findings_file}")
+        
+    except Exception as e:
+        click.echo(f"Error during weekly update: {str(e)}", err=True)
+        click.echo(traceback.format_exc(), err=True)
+        sys.exit(1)
+
 @zap.command('alerts-to-findings')
 @click.argument('csv_file', type=click.Path(exists=True))
-def alerts_to_findings(csv_file):
+@click.option('--output', '-o', type=click.Path(), help='Output file path (default: input file with .findings.json extension)')
+def alerts_to_findings(csv_file, output):
     """Convert ZAP CSV alerts to findings JSON format.
     
     CSV_FILE should be a ZAP CSV report file.
@@ -254,7 +377,7 @@ def alerts_to_findings(csv_file):
     """
     try:
         # Convert alerts to findings
-        output_file = convert_alerts_to_findings(csv_file)
+        output_file = convert_alerts_to_findings(csv_file, output)
         
         # Load and display first finding
         with open(output_file) as f:
@@ -317,7 +440,8 @@ def alerts_diff(poam_file: str, findings_file: str, json_output: Optional[str]) 
 
 @cis.command('split-connected-sheet')
 @click.argument('xlsx_file', type=click.Path(exists=True, path_type=Path))
-def split_connected_sheet_cmd(xlsx_file: Path) -> None:
+@click.option('--output', '-o', type=click.Path(path_type=Path), help='Output directory for split CSV files (default: input directory/Divided CIS Scans)')
+def split_connected_sheet_cmd(xlsx_file: Path, output: Optional[Path]) -> None:
     """Split a CIS connected sheet into separate CSV files by date.
     
     XLSX_FILE should be a CIS connected sheet Excel file.
@@ -329,7 +453,7 @@ def split_connected_sheet_cmd(xlsx_file: Path) -> None:
     - Skip writing if a file for a particular date already exists
     """
     try:
-        output_files = split_connected_sheet(xlsx_file)
+        output_files = split_connected_sheet(xlsx_file, output)
         if output_files:
             click.echo(f"Successfully split {xlsx_file.name} into {len(output_files)} files:")
             for f in output_files:
@@ -342,7 +466,8 @@ def split_connected_sheet_cmd(xlsx_file: Path) -> None:
 
 @cis.command('csv-to-findings')
 @click.argument('csv_file', type=click.Path(exists=True, path_type=Path))
-def csv_to_findings_cmd(csv_file: Path) -> None:
+@click.option('--output', '-o', type=click.Path(path_type=Path), help='Output file path (default: input file with .findings.json extension)')
+def csv_to_findings_cmd(csv_file: Path, output: Optional[Path]) -> None:
     """Convert a CIS CSV file to findings JSON format.
     
     CSV_FILE should be a CIS CSV file (typically from split-connected-sheet).
@@ -353,7 +478,7 @@ def csv_to_findings_cmd(csv_file: Path) -> None:
     - Save the findings as <input_file>.findings.json
     """
     try:
-        output_file = convert_to_findings_file(csv_file)
+        output_file = convert_to_findings_file(csv_file, output)
         
         # Load and display summary
         with open(output_file) as f:

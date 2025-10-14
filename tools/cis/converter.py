@@ -108,12 +108,13 @@ def convert_csv_to_findings(input_file: Path) -> List[Finding]:
     
     return findings
 
-def convert_to_findings_file(input_file: Path) -> Path:
+def convert_to_findings_file(input_file: Path, output_file: Path = None) -> Path:
     """
     Convert a CIS CSV file to a findings JSON file.
     
     Args:
         input_file: Path to the input CSV file
+        output_file: Optional output file path. If None, uses input file with .findings.json extension
         
     Returns:
         Path to the output JSON file
@@ -131,8 +132,11 @@ def convert_to_findings_file(input_file: Path) -> Path:
                 finding_dict[key] = value.strftime("%Y-%m-%d")
         findings_data.append(finding_dict)
     
+    # Determine output file path
+    if output_file is None:
+        output_file = input_file.with_suffix('.findings.json')
+    
     # Write to JSON file
-    output_file = input_file.with_suffix('.findings.json')
     with open(output_file, 'w') as f:
         json.dump(findings_data, f, indent=2)
     

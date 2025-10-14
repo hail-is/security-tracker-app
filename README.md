@@ -51,6 +51,9 @@ The CLI is organized into the following command groups:
 
 1. `poams` - Commands for working with POAMs:
    ```bash
+   # Interactive weekly update process
+   ./cli/cli.py poams weekly-update
+   
    # Preview Trivy POAMs from an Excel file
    ./cli/cli.py poams preview-trivy <file_path> [--limit <n>]
    

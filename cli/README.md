@@ -63,12 +63,36 @@ The CLI is organized into command groups for better organization and usability.
 Commands for working with POAMs are grouped under the `poams` command:
 
 ```bash
+# Interactive weekly update process
+./cli.py poams weekly-update
+
 # Preview POAMs from an Excel file
 ./cli.py poams preview-trivy <file_path> [--limit <n>]
 
 # Apply diff changes to a POAM Excel file
 ./cli.py poams apply-diff <poam_file> <diff_file>
 ```
+
+#### Weekly Update Process
+
+The `weekly-update` command provides an interactive workflow for processing weekly security findings:
+
+1. **Working Directory Setup**: Prompts for a working directory (default: `working/YYYY-MM-DD`)
+2. **Directory Contents**: Shows current directory contents with relative paths
+3. **Input Files**: Prompts for paths to:
+   - Continuous CIS findings sheet (suggests files with "CIS" in name if found)
+   - Most recent ZAP scan (suggests files starting with "hail_report" if found)
+   - Current POAMs file (suggests files with "POAM" in name if found)
+4. **Trivy Processing**: Interactive prompts for:
+   - Downloading Trivy alerts
+   - Converting alerts to findings CSV
+5. **CIS Processing**: Interactive prompts for:
+   - Splitting connected sheet
+   - Converting most recent findings to JSON
+6. **ZAP Processing**: Interactive prompts for:
+   - Converting ZAP scan to findings JSON
+
+All prompts show suggested defaults and accept empty input to use the default value.
 
 ### Trivy Commands
 
