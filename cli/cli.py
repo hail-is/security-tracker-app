@@ -24,6 +24,117 @@ from tools.cis.splitter import split_connected_sheet
 from tools.cis.converter import convert_to_findings_file
 from tools.cis.diff import compare_findings_to_cis_poams
 
+def generate_alerts_diff(findings_file: Path, poams_file: Path, diff_file: Path, 
+                        findings_loader, diff_generator, file_type: str) -> None:
+    """Generate alerts diff for a findings file.
+    
+    Args:
+        findings_file: Path to the findings file
+        poams_file: Path to the POAMs file
+        diff_file: Path where the diff file should be saved
+        findings_loader: Function to load findings from the file
+        diff_generator: Function to generate the diff
+        file_type: Type of findings (for display purposes)
+    
+    Raises:
+        FileNotFoundError: If findings file doesn't exist
+    """
+    if not findings_file.exists():
+        raise FileNotFoundError(f"{file_type} findings file not found: {findings_file}")
+    
+    click.echo(f"> {file_type.lower()} alerts-diff {poams_file} {findings_file}")
+    
+    # Load findings
+    all_findings = findings_loader(findings_file)
+    if not all_findings:
+        click.echo(f"No findings found in {file_type} file")
+        return
+    
+    # Filter out Info severity findings
+    findings = [f for f in all_findings if f.original_risk_rating.lower() != 'info']
+    info_count = len(all_findings) - len(findings)
+    
+    if info_count > 0:
+        click.echo(f"Excluded {info_count} findings with Info severity")
+    
+    if not findings:
+        click.echo("No findings remaining after filtering out Info severity")
+        return
+    
+    # Generate diff
+    diff = diff_generator(findings, poams_file)
+    
+    # Print results
+    diff.print_summary()
+    
+    # Save JSON output
+    with open(diff_file, 'w') as f:
+        json.dump(diff.to_json(), f, indent=2)
+    click.echo(f"{file_type} diff saved to: {diff_file}")
+
+def load_trivy_findings(csv_file: Path):
+    """Load Trivy findings from CSV file."""
+    return import_alerts_from_csv(csv_file)
+
+def load_json_findings(json_file: Path):
+    """Load findings from JSON file."""
+    with open(json_file) as f:
+        findings_data = json.load(f)
+        return [Finding.from_dict(f) for f in findings_data]
+
+def apply_poam_diffs(poam_file: Path, diff_files: list[Path], output_file: Path) -> None:
+    """Apply diff changes to a POAM Excel file.
+    
+    Args:
+        poam_file: Path to the original POAM file
+        diff_files: List of diff files to apply
+        output_file: Path where the updated POAM file should be saved
+    
+    Raises:
+        FileNotFoundError: If POAM file or diff files don't exist
+    """
+    if not poam_file.exists():
+        raise FileNotFoundError(f"POAM file not found: {poam_file}")
+    
+    for diff_file in diff_files:
+        if not diff_file.exists():
+            raise FileNotFoundError(f"Diff file not found: {diff_file}")
+    
+    click.echo(f"> poams apply-diff {poam_file} {' '.join(str(f) for f in diff_files)}")
+    
+    # Copy the original file to the output location
+    import shutil
+    shutil.copy2(poam_file, output_file)
+    
+    # Apply the diffs
+    apply_diff_from_files(output_file, diff_files)
+    click.echo(f"Successfully applied diff changes to {output_file}")
+
+def generate_updated_poam_filename(original_poam_file: str, today: str) -> str:
+    """Generate updated POAM filename by replacing date in original filename with today's date.
+    
+    Args:
+        original_poam_file: Original POAM file path
+        today: Today's date in YYYY-MM-DD format
+    
+    Returns:
+        Updated filename with today's date
+    """
+    from datetime import datetime
+    import re
+    
+    # Try to find a date pattern in the filename (YYYY-MM-DD or YYYY_MM_DD)
+    date_pattern = r'(\d{4}[-_]\d{2}[-_]\d{2})'
+    match = re.search(date_pattern, original_poam_file)
+    
+    if match:
+        # Replace the found date with today's date
+        return re.sub(date_pattern, today, original_poam_file)
+    else:
+        # If no date found, insert today's date before the extension
+        path = Path(original_poam_file)
+        return str(path.parent / f"{path.stem} - {today}{path.suffix}")
+
 
 @click.group()
 def cli():
@@ -136,35 +247,15 @@ def alerts_diff(poam_file: Path, alerts_csv: Path):
     Note: Findings with Info severity are automatically excluded.
     """
     try:
-        # Import findings from CSV
-        all_findings = import_alerts_from_csv(alerts_csv)
-        if not all_findings:
-            click.echo("No findings found in CSV file", err=True)
-            sys.exit(1)
-        
-        # Filter out Info severity findings
-        findings = [f for f in all_findings if f.original_risk_rating.lower() != 'info']
-        info_count = len(all_findings) - len(findings)
-        
-        if info_count > 0:
-            click.echo(f"Excluded {info_count} findings with Info severity")
-        
-        if not findings:
-            click.echo("No findings remaining after filtering out Info severity", err=True)
-            sys.exit(1)
-            
-        # Compare findings against POAMs
-        diff = compare_findings_to_trivy_poams(findings, poam_file)
-        
-        # Print results
-        diff.print_summary()
-
-        # JSON output file path:
         json_output_file = alerts_csv.with_suffix('.diff.json')
-        with open(json_output_file, 'w') as f:
-            json.dump(diff.to_json(), f)
-        click.echo(f"JSON output saved to: {json_output_file}")
-        
+        generate_alerts_diff(
+            alerts_csv,
+            poam_file,
+            json_output_file,
+            load_trivy_findings,
+            compare_findings_to_trivy_poams,
+            "Trivy"
+        )
     except Exception as e:
         click.echo(f"Error comparing alerts: {str(e)}", err=True)
         sys.exit(1)
@@ -278,9 +369,9 @@ def weekly_update():
         click.echo(f"\n--- Input Files ---")
         
         # Find files in working directory
-        cis_files = list(working_path.glob("*CIS*"))
-        hail_files = list(working_path.glob("hail_report*"))
-        poam_files = list(working_path.glob("*POAM*"))
+        cis_files = list(working_path.glob("*CIS*.xlsx"))
+        hail_files = list(working_path.glob("hail_report*.csv"))
+        poam_files = list(working_path.glob("*POAM*.xlsx"))
         
         # Use the first found file or empty string if none found
         cis_default = str(cis_files[0]) if cis_files else ""
@@ -298,10 +389,10 @@ def weekly_update():
         
         skip_trivy = False
         if trivy_findings_file.exists():
-            skip_trivy = click.confirm(f"Trivy findings file {trivy_findings_file} already exists. Skip Trivy actions?")
+            skip_trivy = click.confirm(f"Trivy findings file {trivy_findings_file} already exists. Skip Trivy actions?", default=True)
         
         if not skip_trivy:
-            if click.confirm(f"Download Trivy alerts to {trivy_alerts_file}?"):
+            if click.confirm(f"Download Trivy alerts to {trivy_alerts_file}?", default=True, abort=True):
                 click.echo(f"> trivy download-alerts -d {trivy_alerts_file}")
                 download_trivy_alerts(trivy_alerts_file.parent)
                 # Rename to the exact file we want
@@ -312,7 +403,7 @@ def weekly_update():
                     file.rename(trivy_alerts_file)
                     break
             
-            if click.confirm(f"Convert Trivy alerts to findings CSV?"):
+            if click.confirm(f"Convert Trivy alerts to findings CSV?", default=True, abort=True):
                 click.echo(f"> trivy convert-alerts {trivy_alerts_file} -o {trivy_findings_file}")
                 convert_alerts_to_poam(trivy_alerts_file, trivy_findings_file)
         
@@ -323,10 +414,10 @@ def weekly_update():
         
         skip_cis = False
         if cis_findings_file.exists():
-            skip_cis = click.confirm(f"CIS findings file {cis_findings_file} already exists. Skip CIS actions?")
+            skip_cis = click.confirm(f"CIS findings file {cis_findings_file} already exists. Skip CIS actions?", default=True)
         
         if not skip_cis:
-            if click.confirm(f"Split CIS connected sheet?"):
+            if click.confirm(f"Split CIS connected sheet?", default=True, abort=True):
                 click.echo(f"> cis split-connected-sheet {cis_findings} -o {split_output_dir}")
                 split_connected_sheet(Path(cis_findings), split_output_dir)
                 
@@ -337,7 +428,7 @@ def weekly_update():
                         most_recent_file = max(csv_files, key=lambda f: f.stat().st_mtime)
                         click.echo(f"Most recent findings file: {most_recent_file}")
                         
-                        if click.confirm(f"Convert CIS CSV to findings?"):
+                        if click.confirm(f"Convert CIS CSV to findings?", default=True, abort=True):
                             click.echo(f"> cis csv-to-findings {most_recent_file} -o {cis_findings_file}")
                             convert_to_findings_file(most_recent_file, cis_findings_file)
         
@@ -347,19 +438,91 @@ def weekly_update():
         
         skip_zap = False
         if zap_findings_file.exists():
-            skip_zap = click.confirm(f"ZAP findings file {zap_findings_file} already exists. Skip ZAP actions?")
+            skip_zap = click.confirm(f"ZAP findings file {zap_findings_file} already exists. Skip ZAP actions?", default=True)
         
         if not skip_zap:
-            if click.confirm(f"Convert ZAP scan to findings?"):
+            if click.confirm(f"Convert ZAP scan to findings?", default=True, abort=True):
                 click.echo(f"> zap alerts-to-findings {zap_scan} -o {zap_findings_file}")
                 convert_alerts_to_findings(zap_scan, str(zap_findings_file))
         
+        # 7. Generate alerts-diffs
+        click.echo(f"\n--- Generate Alerts Diffs ---")
+        
+        # Trivy alerts diff
+        trivy_diff_file = trivy_findings_file.with_suffix('.diff.json')
+        skip_trivy_diff = False
+        if trivy_diff_file.exists():
+            skip_trivy_diff = click.confirm(f"Trivy diff file {trivy_diff_file} already exists. Skip Trivy diff generation?", default=True)
+        
+        if not skip_trivy_diff:
+            if click.confirm(f"Generate Trivy alerts diff?", default=True, abort=True):
+                generate_alerts_diff(
+                    trivy_findings_file, 
+                    Path(poams_file), 
+                    trivy_diff_file,
+                    load_trivy_findings,
+                    compare_findings_to_trivy_poams,
+                    "Trivy"
+                )
+        
+        # CIS alerts diff
+        cis_diff_file = cis_findings_file.with_suffix('.diff.json')
+        skip_cis_diff = False
+        if cis_diff_file.exists():
+            skip_cis_diff = click.confirm(f"CIS diff file {cis_diff_file} already exists. Skip CIS diff generation?", default=True)
+        
+        if not skip_cis_diff:
+            if click.confirm(f"Generate CIS alerts diff?", default=True, abort=True):
+                generate_alerts_diff(
+                    cis_findings_file, 
+                    Path(poams_file), 
+                    cis_diff_file,
+                    load_json_findings,
+                    compare_findings_to_cis_poams,
+                    "CIS"
+                )
+        
+        # ZAP alerts diff
+        zap_diff_file = zap_findings_file.with_suffix('.diff.json')
+        skip_zap_diff = False
+        if zap_diff_file.exists():
+            skip_zap_diff = click.confirm(f"ZAP diff file {zap_diff_file} already exists. Skip ZAP diff generation?", default=True)
+        
+        if not skip_zap_diff:
+            if click.confirm(f"Generate ZAP alerts diff?", default=True, abort=True):
+                generate_alerts_diff(
+                    zap_findings_file, 
+                    Path(poams_file), 
+                    zap_diff_file,
+                    load_json_findings,
+                    compare_findings_to_zap_poams,
+                    "ZAP"
+                )
+
+        # 8. Apply diffs
+        click.echo(f"\n--- Apply Diffs ---")
+        
+        # Generate updated POAM filename
+        updated_poam_file = generate_updated_poam_filename(poams_file, today)
+        updated_poam_path = Path(updated_poam_file)
+        
+        skip_apply_diffs = False
+        if updated_poam_path.exists():
+            skip_apply_diffs = click.confirm(f"Updated POAM file {updated_poam_path} already exists. Skip applying diffs?", default=True)
+        
+        if not skip_apply_diffs:
+            if click.confirm(f"Apply diffs to create updated POAMs?", default=True, abort=True):
+                diff_files = [trivy_diff_file, cis_diff_file, zap_diff_file]
+                
+                apply_poam_diffs(Path(poams_file), diff_files, updated_poam_path)
+
         click.echo(f"\n--- Weekly Update Complete ---")
         click.echo(f"Working directory: {working_path}")
-        click.echo(f"Generated files:")
+        click.echo(f"Output files to upload:")
         click.echo(f"  trivy findings: {trivy_findings_file}")
         click.echo(f"  cis findings: {cis_findings_file}")
         click.echo(f"  zap findings: {zap_findings_file}")
+        click.echo(f"  updated POAMs: {updated_poam_path}")
         
     except Exception as e:
         click.echo(f"Error during weekly update: {str(e)}", err=True)
@@ -403,37 +566,18 @@ def alerts_diff(poam_file: str, findings_file: str, json_output: Optional[str]) 
     Note: Findings with Info severity are automatically excluded.
     """
     try:
-        # Load findings from JSON file
-        with open(findings_file) as f:
-            findings_data = json.load(f)
-            all_findings = [Finding.from_dict(f) for f in findings_data]
-        
-        # Filter out Info severity findings
-        findings = [f for f in all_findings if f.original_risk_rating.lower() != 'info']
-        info_count = len(all_findings) - len(findings)
-        
-        if info_count > 0:
-            click.echo(f"Excluded {info_count} findings with Info severity")
-        
-        if not findings:
-            click.echo("No findings remaining after filtering out Info severity", err=True)
-            sys.exit(1)
-        
-        # Compare findings to POAMs
-        diff = compare_findings_to_zap_poams(findings, poam_file)
-        
-        # Print human readable summary
-        diff.print_summary()
-        
-        # Save JSON output if requested
         if not json_output:
-            # Finding file as a path:
             findings_path = Path(findings_file)
             json_output = findings_path.with_suffix('.diff.json')
-        json_data = diff.to_json()
-        with open(json_output, 'w') as f:
-            json.dump(json_data, f, indent=2)
-            click.echo(f"JSON output saved to: {json_output}")
+        
+        generate_alerts_diff(
+            Path(findings_file),
+            Path(poam_file),
+            Path(json_output),
+            load_json_findings,
+            compare_findings_to_zap_poams,
+            "ZAP"
+        )
     except Exception as e:
         click.echo(f"Error comparing findings: {str(e)}", err=True)
         sys.exit(1)
@@ -509,37 +653,18 @@ def alerts_diff(poam_file: str, findings_file: str, json_output: Optional[str]) 
     Note: Findings with Info severity are automatically excluded.
     """
     try:
-        # Load findings from JSON file
-        with open(findings_file) as f:
-            findings_data = json.load(f)
-            all_findings = [Finding.from_dict(f) for f in findings_data]
-        
-        # Filter out Info severity findings
-        findings = [f for f in all_findings if f.original_risk_rating.lower() != 'info']
-        info_count = len(all_findings) - len(findings)
-        
-        if info_count > 0:
-            click.echo(f"Excluded {info_count} findings with Info severity")
-        
-        if not findings:
-            click.echo("No findings remaining after filtering out Info severity", err=True)
-            sys.exit(1)
-        
-        # Compare findings to configuration findings
-        diff = compare_findings_to_cis_poams(findings, poam_file)
-        
-        # Print human readable summary
-        diff.print_summary()
-        
-        # Save JSON output if requested
         if not json_output:
-            # Finding file as a path:
             findings_path = Path(findings_file)
             json_output = findings_path.with_suffix('.diff.json')
-        json_data = diff.to_json()
-        with open(json_output, 'w') as f:
-            json.dump(json_data, f, indent=2)
-            click.echo(f"JSON output saved to: {json_output}")
+        
+        generate_alerts_diff(
+            Path(findings_file),
+            Path(poam_file),
+            Path(json_output),
+            load_json_findings,
+            compare_findings_to_cis_poams,
+            "CIS"
+        )
     except Exception as e:
         click.echo(f"Error comparing findings: {str(e)}", err=True)
         sys.exit(1)
