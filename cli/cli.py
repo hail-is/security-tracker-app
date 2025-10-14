@@ -82,33 +82,6 @@ def load_json_findings(json_file: Path):
         findings_data = json.load(f)
         return [Finding.from_dict(f) for f in findings_data]
 
-def apply_poam_diffs(poam_file: Path, diff_files: list[Path], output_file: Path) -> None:
-    """Apply diff changes to a POAM Excel file.
-    
-    Args:
-        poam_file: Path to the original POAM file
-        diff_files: List of diff files to apply
-        output_file: Path where the updated POAM file should be saved
-    
-    Raises:
-        FileNotFoundError: If POAM file or diff files don't exist
-    """
-    if not poam_file.exists():
-        raise FileNotFoundError(f"POAM file not found: {poam_file}")
-    
-    for diff_file in diff_files:
-        if not diff_file.exists():
-            raise FileNotFoundError(f"Diff file not found: {diff_file}")
-    
-    click.echo(f"> poams apply-diff {poam_file} {' '.join(str(f) for f in diff_files)}")
-    
-    # Copy the original file to the output location
-    import shutil
-    shutil.copy2(poam_file, output_file)
-    
-    # Apply the diffs
-    apply_diff_from_files(output_file, diff_files)
-    click.echo(f"Successfully applied diff changes to {output_file}")
 
 def generate_updated_poam_filename(original_poam_file: str, today: str) -> str:
     """Generate updated POAM filename by replacing date in original filename with today's date.
@@ -263,7 +236,8 @@ def alerts_diff(poam_file: Path, alerts_csv: Path):
 @poams.command('apply-diff')
 @click.argument('poam_file', type=click.Path(exists=True, path_type=Path))
 @click.argument('diff_files', nargs=-1, type=click.Path(exists=True, path_type=Path))
-def apply_diff(poam_file: Path, diff_files: tuple) -> None:
+@click.option('--output', '-o', type=click.Path(path_type=Path), help='Output file path (default: creates timestamped backup)')
+def apply_diff(poam_file: Path, diff_files: tuple, output: Optional[Path]) -> None:
     """Apply diff changes to a POAM Excel file.
     
     POAM_FILE: Excel file containing POAMs
@@ -275,14 +249,16 @@ def apply_diff(poam_file: Path, diff_files: tuple) -> None:
     - Move closed POAMs from Open to Closed sheet
     
     If multiple diff files are provided, they will be merged before applying.
+    If --output is specified, the updated file will be saved to that location.
+    Otherwise, a default name will be used.
     """
     try:
         if not diff_files:
             click.echo("Error: At least one diff file must be provided", err=True)
             sys.exit(1)
 
-        apply_diff_from_files(poam_file, list(diff_files))
-        click.echo(f"Successfully applied diff changes to {poam_file}")
+        result = apply_diff_from_files(poam_file, list(diff_files), output)
+        click.echo(f"Successfully applied diff changes to {result}")
     except Exception as e:
         click.echo(f"Error applying diff: {str(e)}", err=True)
         click.echo("\nFull traceback:", err=True)
@@ -421,11 +397,11 @@ def weekly_update():
                 click.echo(f"> cis split-connected-sheet {cis_findings} -o {split_output_dir}")
                 split_connected_sheet(Path(cis_findings), split_output_dir)
                 
-                # Find the most recent findings file
+                # Find the most recent findings file (sort by filename since filenames include the date in YYYY-MM-DD format and are otherwise the same)
                 if split_output_dir.exists():
                     csv_files = list(split_output_dir.glob("*.csv"))
                     if csv_files:
-                        most_recent_file = max(csv_files, key=lambda f: f.stat().st_mtime)
+                        most_recent_file = max(csv_files, key=lambda f: f.name)
                         click.echo(f"Most recent findings file: {most_recent_file}")
                         
                         if click.confirm(f"Convert CIS CSV to findings?", default=True, abort=True):
@@ -514,7 +490,11 @@ def weekly_update():
             if click.confirm(f"Apply diffs to create updated POAMs?", default=True, abort=True):
                 diff_files = [trivy_diff_file, cis_diff_file, zap_diff_file]
                 
-                apply_poam_diffs(Path(poams_file), diff_files, updated_poam_path)
+                click.echo(f"> poams apply-diff {poams_file} {' '.join(str(f) for f in diff_files)} -o {updated_poam_path}")
+    
+                # Apply the diffs
+                result = apply_diff_from_files(poams_file, diff_files, updated_poam_path)
+                click.echo(f"Successfully applied diff changes to {result}")
 
         click.echo(f"\n--- Weekly Update Complete ---")
         click.echo(f"Working directory: {working_path}")
@@ -522,7 +502,7 @@ def weekly_update():
         click.echo(f"  trivy findings: {trivy_findings_file}")
         click.echo(f"  cis findings: {cis_findings_file}")
         click.echo(f"  zap findings: {zap_findings_file}")
-        click.echo(f"  updated POAMs: {updated_poam_path}")
+        click.echo(f"  updated POAMs: {result}")
         
     except Exception as e:
         click.echo(f"Error during weekly update: {str(e)}", err=True)

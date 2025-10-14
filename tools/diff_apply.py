@@ -8,12 +8,15 @@ from datetime import datetime
 import shutil
 import openpyxl
 
-def create_updateable_copy(file_path: Path) -> Path:
-    """Create a timestamped backup copy of the Excel file."""
+def create_updateable_copy(file_path: Path, output_file: Path = None) -> Path:
+    """Create an updateable copy of the Excel file so that the original is not modified."""
     timestamp = datetime.now().strftime('%Y%m%d-%H%M%S')
-    backup_path = file_path.parent / f"{file_path.stem}-diff-applied-{timestamp}{file_path.suffix}"
-    shutil.copy2(file_path, backup_path)
-    return backup_path
+    if output_file is None:
+        new_file_path = file_path.parent / f"{file_path.stem}-diff-applied-{timestamp}{file_path.suffix}"
+    else:
+        new_file_path = output_file
+    shutil.copy2(file_path, new_file_path)
+    return new_file_path
 
 def dict_to_row(data: Dict[str, Any]) -> Dict[str, Any]:
     """Convert a dictionary to row format."""
@@ -52,7 +55,7 @@ def dict_to_row(data: Dict[str, Any]) -> Dict[str, Any]:
     }
     return {excel_mapping[k]: v for k, v in data.items() if k in excel_mapping}
 
-def apply_diff(poam_file: Path, diff_json: Dict[str, Any]) -> None:
+def apply_diff(poam_file: Path, diff_json: Dict[str, Any], output_file: Path = None) -> Path:
     """
     Apply diff changes to a POAM Excel file.
     
@@ -61,7 +64,7 @@ def apply_diff(poam_file: Path, diff_json: Dict[str, Any]) -> None:
         diff_json: Dictionary containing diff changes
     """
     # Create editable copy
-    editable_copy = create_updateable_copy(poam_file)
+    editable_copy = create_updateable_copy(poam_file, output_file)
     
     try:
         # Load workbook from editable copy
@@ -170,10 +173,12 @@ def apply_diff(poam_file: Path, diff_json: Dict[str, Any]) -> None:
         
         # Save changes to the editable copy
         wb.save(editable_copy)
-        
+        return editable_copy
     except Exception as e:
         # If anything goes wrong, leave the half-edited copy for inspection
         raise type(e)(f"Error applying diff changes. Incomplete edit saved as {editable_copy}. Error: {str(e)}") from e
+    finally:
+        wb.close()
 
 def merge_diffs(diff_files: List[Path]) -> Dict[str, Any]:
     """
@@ -216,13 +221,15 @@ def merge_diffs(diff_files: List[Path]) -> Dict[str, Any]:
     
     return merged_diff
 
-def apply_diff_from_files(poam_file: Path, diff_files: List[Path]) -> None:
+def apply_diff_from_files(poam_file: Path, diff_files: List[Path], output_file: Path = None) -> Path:
     """
     Apply diff changes from a JSON file to a POAM Excel file.
     
     Args:
         poam_file: Path to the POAM Excel file
         diff_files: List of paths to JSON diff files
+        output_file: Path to the output Excel file
     """
     merged_diff = merge_diffs(diff_files)
-    apply_diff(poam_file, merged_diff)
+    result = apply_diff(poam_file, merged_diff, output_file)
+    return result
