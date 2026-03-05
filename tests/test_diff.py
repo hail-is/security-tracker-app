@@ -197,7 +197,7 @@ def test_compare_findings_to_poams():
     ]
     
     # Compare findings to POAMs
-    diff = compare_findings_to_poams(findings, open_poams, closed_poams)
+    diff = compare_findings_to_poams(findings, open_poams, closed_poams, existing_poam_ids=[], poam_generator=lambda f, ids: [])
     
     # Verify new findings
     assert {f.finding_id for f in diff.new_findings} == {"TRIVY-002"}

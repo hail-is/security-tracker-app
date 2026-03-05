@@ -96,7 +96,7 @@ def generate_poams_from_findings(findings: List[Finding], existing_poam_ids: Lis
         # Unpack findings and their completion dates
         findings_list = [f for f, _ in group]
         first_finding = findings_list[0]
-        completion_date = first_finding.scheduled_completion_date
+        completion_date = group[0][1]
         
         # Get earliest detection date from group
         detection_date = min(f.original_detection_date for f in findings_list)
