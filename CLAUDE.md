@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Overview
 
-A security findings tracker that manages POA&M (Plan of Action and Milestones) lifecycle for compliance purposes. The **CLI is the primary entry point** (`cli/cli.py`). The Streamlit web app in `app/` is abandonware — do not work on it.
+A security findings tracker that manages POA&M (Plan of Action and Milestones) lifecycle for compliance purposes. The CLI (`cli/cli.py`) is the sole entry point.
 
 ## Commands
 
