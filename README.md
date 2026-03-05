@@ -97,14 +97,3 @@ export GOOGLE_APPLICATION_CREDENTIALS="/path/to/service-account-key.json"
 
 ### Available Commands
 
-1. Download Google Sheets:
-```bash
-# Using a Google Sheets URL
-./cli/cli.py download-gsheet "https://docs.google.com/spreadsheets/d/YOUR_SHEET_ID"
-
-# Or using just the file ID
-./cli/cli.py download-gsheet "YOUR_SHEET_ID"
-```
-
-The downloaded files will be saved to the `working` directory in the project root.
-

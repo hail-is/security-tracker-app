@@ -2,7 +2,7 @@
 Module for comparing ZAP findings against existing POAMs.
 """
 from dataclasses import dataclass
-from typing import List, Optional, Tuple, Dict, Any
+from typing import List, Optional, Tuple, Dict, Any, Union
 from pathlib import Path
 from datetime import datetime
 
@@ -33,7 +33,7 @@ class ZapAlertsDiff:
         Returns:
             Dictionary containing the diff results in a structured format
         """
-        def format_datetime(dt: datetime | str) -> str:
+        def format_datetime(dt: Union[datetime, str]) -> str:
             if isinstance(dt, str):
                 return dt
             else:

@@ -22,5 +22,5 @@ def ensure_working_dir() -> Path:
         # Fall back to pwd/working
         working_dir = Path(os.getcwd()) / 'working'
     
-    working_dir.mkdir(exist_ok=True)
+    working_dir.mkdir(parents=True, exist_ok=True)
     return working_dir 

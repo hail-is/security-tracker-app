@@ -66,6 +66,7 @@ def apply_diff(poam_file: Path, diff_json: Dict[str, Any], output_file: Path = N
     # Create editable copy
     editable_copy = create_updateable_copy(poam_file, output_file)
     
+    wb = None
     try:
         # Load workbook from editable copy
         wb = openpyxl.load_workbook(editable_copy)
@@ -178,7 +179,8 @@ def apply_diff(poam_file: Path, diff_json: Dict[str, Any], output_file: Path = N
         # If anything goes wrong, leave the half-edited copy for inspection
         raise type(e)(f"Error applying diff changes. Incomplete edit saved as {editable_copy}. Error: {str(e)}") from e
     finally:
-        wb.close()
+        if wb is not None:
+            wb.close()
 
 def merge_diffs(diff_files: List[Path]) -> Dict[str, Any]:
     """

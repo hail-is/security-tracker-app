@@ -159,9 +159,7 @@ def download_alerts(destination):
     If destination is not specified, uses WORKING environment variable or pwd/working
     and sets filename to trivy-alerts-<date>.json
     
-    Requires one of:
-    1. GitHub CLI (gh) to be installed and authenticated via 'gh auth login'
-    2. GitHub token provided via --token option or GITHUB_TOKEN environment variable
+    Requires the GitHub CLI (gh) to be installed and authenticated via 'gh auth login'.
     """
     try:
         if destination:
@@ -540,7 +538,7 @@ def alerts_to_findings(csv_file, output):
 @click.argument('poam_file', type=click.Path(exists=True))
 @click.argument('findings_file', type=click.Path(exists=True))
 @click.option('--json-output', type=click.Path(), help='Path to save JSON output')
-def alerts_diff(poam_file: str, findings_file: str, json_output: Optional[str]) -> None:
+def zap_alerts_diff(poam_file: str, findings_file: str, json_output: Optional[str]) -> None:
     """Compare ZAP findings against existing POAMs.
     
     Note: Findings with Info severity are automatically excluded.
@@ -623,7 +621,7 @@ def csv_to_findings_cmd(csv_file: Path, output: Optional[Path]) -> None:
 @click.argument('poam_file', type=click.Path(exists=True))
 @click.argument('findings_file', type=click.Path(exists=True))
 @click.option('--json-output', type=click.Path(), help='Path to save JSON output')
-def alerts_diff(poam_file: str, findings_file: str, json_output: Optional[str]) -> None:
+def cis_alerts_diff(poam_file: str, findings_file: str, json_output: Optional[str]) -> None:
     """
     Compare CIS findings against existing configuration findings.
     

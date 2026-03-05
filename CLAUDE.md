@@ -58,7 +58,7 @@ Each scanner type (`trivy/`, `zap/`, `cis/`) has:
 - `diff.py` — calls `compare_findings_to_poams()` with the right POAM filter and generator
 - `poam_generator.py` — generates `PoamEntry` objects with appropriate POAM IDs
 
-POAM ID formats: Trivy → `YYYY-TRIVYXXXX`, CIS → `CIS-<CIS_ID>-XXXX`
+POAM ID formats: Trivy → `YYYY-TRIVYXXXX`, CIS → `YYYY-CISXXXX`
 
 ### Working Directory Convention
 By default, files are saved to `working/YYYY-MM-DD/`. The `WORKING` environment variable can override the base path.
