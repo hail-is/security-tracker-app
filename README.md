@@ -1,6 +1,6 @@
 # Security Findings Tracker
 
-A Streamlit-based application for tracking and managing security findings from weekly CSV uploads. The application provides an interface for analyzing security findings, tracking their status, and managing their lifecycle.
+A CLI tool for tracking and managing POA&M (Plan of Action and Milestones) lifecycle for compliance purposes. Processes weekly security findings from Trivy, ZAP, and CIS scans and applies them to a POAM Excel file.
 
 ## Requirements
 
@@ -9,12 +9,10 @@ A Streamlit-based application for tracking and managing security findings from w
 
 ## Features
 
-- Upload and process weekly CSV security findings
-- Track new, existing, and resolved findings
+- Download and process Trivy, ZAP, and CIS findings
+- Diff findings against existing POAMs to identify new, closed, and reopened items
 - Automatic due date assignment based on severity
-- Interactive data visualization
-- Export capabilities for active and resolved findings
-- Modern, responsive UI inspired by hail.is
+- Apply diffs to update the POAM Excel file
 
 ## Installation
 
@@ -40,33 +38,62 @@ source venv/bin/activate  # On Windows: venv\Scripts\activate
 pip install -r requirements.txt
 ```
 
-## Usage
+## Command Line Tools
 
-1. Start the Streamlit application (make sure you're in the repository root directory):
+The application includes command line tools for automation and data management. These tools are available through the `cli.py` script in the `cli` directory.
+
+### Command Groups
+
+The CLI is organized into the following command groups:
+
+1. `poams` - Commands for working with POAMs:
+   ```bash
+   # Interactive weekly update process
+   ./cli/cli.py poams weekly-update
+   
+   # Preview Trivy POAMs from an Excel file
+   ./cli/cli.py poams preview-trivy <file_path> [--limit <n>]
+   
+   # Apply diff changes to a POAM Excel file
+   ./cli/cli.py poams apply-diff <poam_file> <diff_file>
+   ```
+
+2. `trivy` - Commands for working with Trivy:
+   ```bash
+   # Download Trivy alerts from GitHub code scanning API
+   ./cli/cli.py trivy download-alerts [--destination <file_path>]
+   
+   # Convert GitHub Trivy alerts JSON to POAM CSV format
+   ./cli/cli.py trivy convert-alerts <alerts_file> [--output <file_path>]
+   
+   # Compare Trivy alerts against existing POAMs
+   ./cli/cli.py trivy alerts-diff <poam_file> <alerts_csv>
+   ```
+
+To see all available commands and their options:
 ```bash
-# On Unix/macOS:
-PYTHONPATH=$PYTHONPATH:. streamlit run app/main.py
-
-# On Windows (PowerShell):
-$env:PYTHONPATH = "$env:PYTHONPATH;."
-streamlit run app/main.py
-
-# On Windows (Command Prompt):
-set PYTHONPATH=%PYTHONPATH%;.
-streamlit run app/main.py
+./cli/cli.py --help
 ```
 
-2. Open your web browser and navigate to the URL shown in the terminal (typically http://localhost:8501)
+For help on a specific command group:
+```bash
+./cli/cli.py poams --help
+./cli/cli.py trivy --help
+```
 
-3. Use the application:
-   - Upload your weekly CSV file using the file uploader
-   - Set the analysis date
-   - View the summary statistics and visualizations
-   - Track recurrances and resolutions through additional scans and uploads.
-   - Export findings as needed
+### Authentication
 
-## Database
+The tools that interact with Google services use Application Default Credentials (ADC). To set up authentication:
 
-The application uses SQLite for data storage. The database file is created at `app/database/findings.db` and includes tables for:
-- Findings tracking
-- Upload history
+1. Using gcloud (recommended for development):
+```bash
+gcloud auth application-default login
+```
+
+2. Or using a service account (recommended for production):
+```bash
+export GOOGLE_APPLICATION_CREDENTIALS="/path/to/service-account-key.json"
+```
+
+### Available Commands
+
