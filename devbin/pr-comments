@@ -1,0 +1,42 @@
+#!/usr/bin/env bash
+# Usage: pr-comments <pr-number>
+# Downloads and prints all comments on a GitHub PR:
+#   - The review summaries (from /pulls/:pr/reviews)
+#   - Inline code comments (from /pulls/:pr/comments)
+#   - General issue comments (from /issues/:pr/comments)
+
+set -euo pipefail
+
+PR="${1:?Usage: pr-comments <pr-number>}"
+REPO=$(gh repo view --json nameWithOwner -q .nameWithOwner)
+
+echo "═══════════════════════════════════════════════════════════"
+echo "  PR #$PR — $REPO"
+echo "═══════════════════════════════════════════════════════════"
+
+# ── Review summaries ────────────────────────────────────────────
+echo ""
+echo "── REVIEWS ────────────────────────────────────────────────"
+
+gh api "repos/$REPO/pulls/$PR/reviews" --paginate | \
+  jq -r '.[] | (.body // "") as $body |
+    if ($body | length) > 0
+    then "\n[\(.state)] \(.user.login) — \(.submitted_at)\n\($body)"
+    else "\n[\(.state)] \(.user.login) — \(.submitted_at)"
+    end'
+
+# ── Inline code comments ────────────────────────────────────────
+echo ""
+echo "── INLINE COMMENTS ────────────────────────────────────────"
+
+gh api "repos/$REPO/pulls/$PR/comments" --paginate | \
+  jq -r '.[] |
+    "\n\(.path) (line \(.original_line // .line // "?")) — \(.user.login)\n\(.body)"'
+
+# ── General PR / issue comments ─────────────────────────────────
+echo ""
+echo "── GENERAL COMMENTS ───────────────────────────────────────"
+
+gh api "repos/$REPO/issues/$PR/comments" --paginate | \
+  jq -r '.[] |
+    "\n\(.user.login) — \(.created_at)\n\(.body)"'
