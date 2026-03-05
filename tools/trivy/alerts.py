@@ -32,7 +32,7 @@ ALERTS_TO_POAM_QUERY = """
     "Milestone Changes": "",
     "Vendor Dependency": "Yes",
     "Vendor Dependent Product Name": "Ubuntu",
-    "Original Risk Rating": .rule.security_severity_level,
+    "Original Risk Rating": (.rule.security_severity_level // (.rule.tags | map(select(test("^(critical|high|medium|low)$"; "i"))) | first | ascii_downcase)),
     "Adjusted Risk Rating": "",
     "Risk Adjustment": "",
     "False Positive": "No",
@@ -120,8 +120,11 @@ def convert_alerts_to_poam(alerts_file: Path, output_path: Path = None) -> Path:
         # Handle dates and intervals
         orig_date = row["Original Detection Date"]
         status_date = row["Status Date"]
+        if not row["Original Risk Rating"]:
+            print(f"Excluded alert {row['Alert ID']} ({row['CVE']}): no severity rating")
+            continue
         sev = row["Original Risk Rating"].lower()
-        
+
         # Calculate fix date based on severity
         fix_intervals = {"high": 14, "medium": 90, "low": 180}
         fix_interval = fix_intervals.get(sev, 0)
