@@ -23,6 +23,7 @@ from tools.zap.diff import compare_findings_to_zap_poams
 from tools.cis.splitter import split_connected_sheet
 from tools.cis.converter import convert_to_findings_file
 from tools.cis.diff import compare_findings_to_cis_poams
+from tools.gdrive import download_scan_inputs, upload_scan_outputs
 
 def generate_alerts_diff(findings_file: Path, poams_file: Path, diff_file: Path, 
                         findings_loader, diff_generator, file_type: str) -> None:
@@ -339,9 +340,19 @@ def weekly_update():
         else:
             click.echo("  (empty)")
         
-        # 3. Ask for input file paths
+        # 3. Optionally download files from Google Drive
+        click.echo(f"\n--- Download from Google Drive ---")
+        drive_ctx = None
+        if click.confirm("Download scan inputs from Google Drive?", default=True):
+            drive_folder_id = click.prompt(
+                "Google Drive root folder ID",
+                default=os.environ.get('GDRIVE_FOLDER_ID', '')
+            )
+            _, _, _, drive_ctx = download_scan_inputs(working_path, drive_folder_id)
+
+        # 4. Ask for input file paths
         click.echo(f"\n--- Input Files ---")
-        
+
         # Find files in working directory
         cis_files = list(working_path.glob("*CIS*.xlsx"))
         hail_files = list(working_path.glob("hail_report*.csv"))
@@ -494,13 +505,16 @@ def weekly_update():
                 result = apply_diff_from_files(poams_file, diff_files, updated_poam_path)
                 click.echo(f"Successfully applied diff changes to {result}")
 
+        # 9. Upload results to Google Drive
+        click.echo(f"\n--- Upload Results to Google Drive ---")
+        if drive_ctx is not None:
+            if click.confirm("Upload results to Google Drive?", default=True):
+                upload_scan_outputs(working_path, drive_ctx)
+        else:
+            click.echo("(Skipped — no Drive session from download step)")
+
         click.echo(f"\n--- Weekly Update Complete ---")
         click.echo(f"Working directory: {working_path}")
-        click.echo(f"Output files to upload:")
-        click.echo(f"  trivy findings: {trivy_findings_file}")
-        click.echo(f"  cis findings: {cis_findings_file}")
-        click.echo(f"  zap findings: {zap_findings_file}")
-        click.echo(f"  updated POAMs: {result}")
         
     except Exception as e:
         click.echo(f"Error during weekly update: {str(e)}", err=True)
