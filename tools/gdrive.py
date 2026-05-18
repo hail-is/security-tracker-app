@@ -6,14 +6,15 @@ import urllib.request
 from dataclasses import dataclass, field
 from datetime import date, timedelta
 from pathlib import Path
-from typing import Any
+from typing import Any, Optional
 
 import click
 import google.oauth2.credentials
 from googleapiclient.discovery import build
 from googleapiclient.http import MediaFileUpload, MediaIoBaseDownload
 
-DRIVE_SCOPE = 'https://www.googleapis.com/auth/drive.readonly'
+DRIVE_SCOPE_WRITE = 'https://www.googleapis.com/auth/drive'
+DRIVE_SCOPE_READ = 'https://www.googleapis.com/auth/drive.readonly'
 
 
 @dataclass
@@ -45,11 +46,12 @@ def check_drive_auth():
     resp = urllib.request.urlopen(url)
     info = json.loads(resp.read())
     scopes = info.get('scope', '').split()
-    has_drive = any(s in scopes for s in [
-        DRIVE_SCOPE,
-        'https://www.googleapis.com/auth/drive',
-    ])
-    if not has_drive:
+    if DRIVE_SCOPE_WRITE not in scopes:
+        if DRIVE_SCOPE_READ in scopes:
+            raise click.ClickException(
+                'Google Drive credentials are read-only; write access is required for uploads.\n'
+                'Run: gcloud auth login --enable-gdrive-access'
+            )
         raise click.ClickException(
             'Google Drive scope not found in current credentials.\n'
             'Run: gcloud auth login --enable-gdrive-access'
@@ -88,7 +90,7 @@ def _list_files(service, folder_id):
     return results['files']
 
 
-def _parse_date_from_name(name: str) -> date | None:
+def _parse_date_from_name(name: str) -> Optional[date]:
     # hail_report_20260514.csv  →  YYYYMMDD
     m = re.search(r'(\d{8})', name)
     if m:
@@ -369,10 +371,16 @@ def upload_scan_outputs(working_dir: Path, ctx: DriveContext):
     else:
         click.echo('  POAM:  *** NOT FOUND ***')
 
-    missing = [name for name, f in [('CIS', cis_local), ('Trivy', trivy_local), ('POAM', poam_local)] if not f]
-    if missing:
-        click.echo(f'\n  ⚠️  Missing files: {", ".join(missing)}')
+    missing_files = [name for name, f in [('CIS', cis_local), ('Trivy', trivy_local), ('POAM', poam_local)] if not f]
+    if missing_files:
+        click.echo(f'\n  ⚠️  Missing local files: {", ".join(missing_files)}')
         raise click.ClickException('Required output files not found; cannot upload.')
+
+    missing_folders = [k for k in ('cis_upload', 'trivy_upload', 'poam_upload') if k not in ctx.folder_ids]
+    if missing_folders:
+        labels = {'cis_upload': 'Vulnerability Reports/CIS', 'trivy_upload': 'Vulnerability Reports/Trivy', 'poam_upload': 'Plan of Action and Milestones'}
+        click.echo(f'\n  ⚠️  Destination folders not found in Drive: {", ".join(labels[k] for k in missing_folders)}')
+        raise click.ClickException('Required Drive destination folders not found; cannot upload.')
 
     click.confirm('\nContinue?', default=True, abort=True)
 
