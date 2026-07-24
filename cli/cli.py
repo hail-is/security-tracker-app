@@ -24,6 +24,7 @@ from tools.cis.splitter import split_connected_sheet
 from tools.cis.converter import convert_to_findings_file
 from tools.cis.diff import compare_findings_to_cis_poams
 from tools.gdrive import download_scan_inputs, upload_scan_outputs
+from tools.local_config import load_config, set_config_value
 
 def generate_alerts_diff(findings_file: Path, poams_file: Path, diff_file: Path, 
                         findings_loader, diff_generator, file_type: str) -> None:
@@ -344,10 +345,12 @@ def weekly_update():
         click.echo(f"\n--- Download from Google Drive ---")
         drive_ctx = None
         if click.confirm("Download scan inputs from Google Drive?", default=True):
+            local_config = load_config()
             drive_folder_id = click.prompt(
                 "Google Drive root folder ID",
-                default=os.environ.get('GDRIVE_FOLDER_ID', '')
+                default=os.environ.get('GDRIVE_FOLDER_ID', local_config.get('gdrive_folder_id', ''))
             )
+            set_config_value('gdrive_folder_id', drive_folder_id)
             _, _, _, drive_ctx = download_scan_inputs(working_path, drive_folder_id)
 
         # 4. Ask for input file paths
@@ -356,12 +359,12 @@ def weekly_update():
         # Find files in working directory
         cis_files = list(working_path.glob("*CIS*.xlsx"))
         hail_files = list(working_path.glob("hail_report*.csv"))
-        poam_files = list(working_path.glob("*POAM*.xlsx"))
-        
+        poam_files = sorted(working_path.glob("INTERNAL*POAM*.xlsx"), key=lambda f: f.name)
+
         # Use the first found file or empty string if none found
         cis_default = str(cis_files[0]) if cis_files else ""
         zap_default = str(hail_files[0]) if hail_files else ""
-        poams_default = str(poam_files[0]) if poam_files else ""
+        poams_default = str(poam_files[-1]) if poam_files else ""
 
         cis_findings = click.prompt("Path to continuous CIS findings sheet", default=cis_default)
         zap_scan = click.prompt("Path to most recent ZAP scan", default=zap_default)
