@@ -359,12 +359,12 @@ def weekly_update():
         # Find files in working directory
         cis_files = list(working_path.glob("*CIS*.xlsx"))
         hail_files = list(working_path.glob("hail_report*.csv"))
-        poam_files = sorted(working_path.glob("INTERNAL*POAM*.xlsx"), key=lambda f: f.name)
+        poam_files = list(working_path.glob("*POAM*.xlsx"))
 
         # Use the first found file or empty string if none found
         cis_default = str(cis_files[0]) if cis_files else ""
         zap_default = str(hail_files[0]) if hail_files else ""
-        poams_default = str(poam_files[-1]) if poam_files else ""
+        poams_default = str(poam_files[0]) if poam_files else ""
 
         cis_findings = click.prompt("Path to continuous CIS findings sheet", default=cis_default)
         zap_scan = click.prompt("Path to most recent ZAP scan", default=zap_default)
