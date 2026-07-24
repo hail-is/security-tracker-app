@@ -181,3 +181,6 @@ cython_debug/
 # Ignore any findings.db files
 findings.db
 working/
+
+# Local, non-committed settings (e.g. remembered Google Drive folder ID)
+.local_config.json
