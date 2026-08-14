@@ -131,97 +131,49 @@ class PoamFileDiff:
         return result
 
     def print_summary(self, max_preview: int = 10) -> None:
-        """Print a human-readable summary of the diff."""
-        # Print new findings
-        print("\n=== New Findings ===")
-        print(f"Count: {len(self.new_findings)}")
-        if self.new_findings:
-            finding_ids = [finding.finding_id for finding in self.new_findings]
-            print(f"Finding IDs: {', '.join(finding_ids)}")
+        """Print a human-readable summary of the diff.
 
-        # Print existing matches
-        print("\n=== Existing Matches ===")
-        print(f"Count: {len(self.existing_matches)}")
-        if self.existing_matches:
-            matches = [f"{match.finding.finding_id} -> {match.poam.poam_id}" 
-                      for match in self.existing_matches[:max_preview]]
-            print(f"Preview of matches: {', '.join(matches)}")
-            if len(self.existing_matches) > max_preview:
-                print(f"... and {len(self.existing_matches) - max_preview} more")
+        Categories that don't represent newly (re)opened items are shown as
+        compact counts. Opened and reopened items get a scannable bulleted
+        list since those are what typically need reviewing.
+        """
+        def format_date(date: Union[datetime, str, None]) -> str:
+            if isinstance(date, datetime):
+                return date.strftime('%Y-%m-%d')
+            return date or "unknown date"
 
-        # Print reopened findings
-        print("\n=== Reopened Findings ===")
-        print(f"Count: {len(self.reopened_findings)}")
-        if self.reopened_findings:
-            matches = [f"{match.finding.finding_id} -> {match.poam.poam_id}" 
-                      for match in self.reopened_findings[:max_preview]]
-            print(f"Preview of matches: {', '.join(matches)}")
-            if len(self.reopened_findings) > max_preview:
-                print(f"... and {len(self.reopened_findings) - max_preview} more")
+        print("\n=== Summary ===")
+        print(f"New findings (unmatched, pre-grouping): {len(self.new_findings)}")
+        print(f"Existing matches (no change): {len(self.existing_matches)}")
+        print(f"Closed POAMs: {len(self.closed_poams)}")
+        print(f"Closed configuration findings: {len(self.closed_configuration_findings)}")
 
-        # Print closed POAMs
-        print("\n=== Closed POAMs ===")
-        print(f"Count: {len(self.closed_poams)}")
-        if self.closed_poams:
-            poam_ids = [poam.poam_id for poam in self.closed_poams]
-            print(f"POAM IDs no longer active: {', '.join(poam_ids)}")
-
-        # Print proposed POAMs
-        print("\n=== Proposed POAMs ===")
-        print(f"Count: {len(self.proposed_poams)}")
+        print("\n=== Opened POAMs ({}) ===".format(len(self.proposed_poams)))
         if self.proposed_poams:
             for findings, poam in self.proposed_poams[:max_preview]:
-                finding_ids = [f.finding_id for f in findings]
-                print(f"{', '.join(finding_ids)} => {poam.poam_id}")
+                finding_ids = ', '.join(f.finding_id for f in findings)
+                date = format_date(poam.original_detection_date)
+                print(f"- [{poam.poam_id}] {poam.weakness_name} "
+                      f"({poam.original_risk_rating}, {date}) — {finding_ids}")
             if len(self.proposed_poams) > max_preview:
-                print(f"... and {len(self.proposed_poams) - max_preview} more")
-            
-            # Show sample of first proposed POAM
-            print("\nSample new POAM:")
-            sample_findings, sample_poam = self.proposed_poams[0]
-            print(f"POAM ID: {sample_poam.poam_id}")
-            print(f"Weakness Name: {sample_poam.weakness_name}")
-            print(f"Asset Identifiers: {sample_poam.asset_identifier}")
-            print(f"Finding IDs: {sample_poam.comments}")
-            # Handle case where date might already be a string
-            detection_date = sample_poam.original_detection_date
-            if isinstance(detection_date, datetime):
-                detection_date = detection_date.strftime('%Y-%m-%d')
-            print(f"Detection Date: {detection_date}")
-            print(f"Risk Rating: {sample_poam.original_risk_rating}")
-            if sample_poam.cve:
-                print(f"CVE: {sample_poam.cve}")
+                print(f"  ... and {len(self.proposed_poams) - max_preview} more")
 
-        # Print configuration findings if present
-        print("\n=== Proposed Configuration Findings ===")
-        print(f"Count: {len(self.proposed_configuration_findings)}")            
+        print("\n=== Opened Configuration Findings ({}) ===".format(len(self.proposed_configuration_findings)))
         if self.proposed_configuration_findings:
             for findings, poam in self.proposed_configuration_findings[:max_preview]:
-                finding_ids = [f.finding_id for f in findings]
-                print(f"{', '.join(finding_ids)} => {poam.poam_id}")
+                finding_ids = ', '.join(f.finding_id for f in findings)
+                date = format_date(poam.original_detection_date)
+                print(f"- [{poam.poam_id}] {poam.weakness_name} "
+                      f"({poam.original_risk_rating}, {date}) — {finding_ids}")
             if len(self.proposed_configuration_findings) > max_preview:
-                print(f"... and {len(self.proposed_configuration_findings) - max_preview} more")
+                print(f"  ... and {len(self.proposed_configuration_findings) - max_preview} more")
 
-            # Show sample of first proposed configuration finding
-            print("\nSample new Configuration Finding:")
-            sample_findings, sample_poam = self.proposed_configuration_findings[0]
-            print(f"POAM ID: {sample_poam.poam_id}")
-            print(f"Weakness Name: {sample_poam.weakness_name}")
-            print(f"Asset Identifiers: {sample_poam.asset_identifier}")
-            print(f"Finding IDs: {sample_poam.comments}")
-            detection_date = sample_poam.original_detection_date
-            if isinstance(detection_date, datetime):
-                detection_date = detection_date.strftime('%Y-%m-%d')
-            print(f"Detection Date: {detection_date}")
-            print(f"Risk Rating: {sample_poam.original_risk_rating}")
-            if sample_poam.cve:
-                print(f"CVE: {sample_poam.cve}")
-
-        print("\n=== Closed Configuration Findings ===")
-        print(f"Count: {len(self.closed_configuration_findings)}")
-        if self.closed_configuration_findings:
-            poam_ids = [poam.poam_id for poam in self.closed_configuration_findings]
-            print(f"Configuration Finding IDs no longer active: {', '.join(poam_ids)}")
+        print("\n=== Reopened Findings ({}) ===".format(len(self.reopened_findings)))
+        if self.reopened_findings:
+            for match in self.reopened_findings[:max_preview]:
+                print(f"- [{match.poam.poam_id}] {match.poam.weakness_name} — {match.finding.finding_id}")
+            if len(self.reopened_findings) > max_preview:
+                print(f"  ... and {len(self.reopened_findings) - max_preview} more")
 
 def _is_exact_match(str1: str, str2: str) -> bool:
     """Check if two strings match exactly, ignoring case."""
