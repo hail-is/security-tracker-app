@@ -168,7 +168,7 @@ def _find_poam_file(service, year_folders, curr_m, prev_m):
             continue
         candidates = []
         for f in _list_files(service, poam_id):
-            if 'INTERNAL' not in f['name'] or not f['name'].endswith('.xlsx'):
+            if not f['name'].startswith('INTERNAL') or not f['name'].endswith('.xlsx'):
                 continue
             d = _parse_date_from_name(f['name'])
             if d:
